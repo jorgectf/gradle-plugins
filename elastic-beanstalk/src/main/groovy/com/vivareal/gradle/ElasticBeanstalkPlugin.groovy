@@ -113,6 +113,8 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 			
 			try{
 			   def requestEnvironmentInfoRequest = new RequestEnvironmentInfoRequest(environmentName:previousEnvironmentName)
+			   def requestEnvironmentInfoResult = elasticBeanstalk.requestEnvironmentInfo(requestEnvironmentInfoRequest)
+		
 		    }catch(Exception e){
 			   println("Environment doesn't exist. creating environment")
 			   def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
