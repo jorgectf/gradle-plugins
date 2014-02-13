@@ -4,6 +4,7 @@ allprojects {
     apply plugin: 'java'
 }
 
+
 subprojects {
     apply plugin: 'groovy'
     apply plugin: 'maven'
@@ -21,14 +22,21 @@ subprojects {
 	compile localGroovy()
     }
 
-
     uploadArchives {
 
 	repositories.mavenDeployer {
+		
 	    repository(url: project.hasProperty('repositoryReleasesUrl')?project.ext.repositoryReleasesUrl:'') {
-		authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
-		password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
+			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
+			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
 	    }
+
+	    snapshotRepository(url: project.hasProperty('repositorySnapshotsUrl')?project.ext.repositorySnapshotsUrl:'') {
+			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
+			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
+	    }
+	
+	
 	}
     }
 }
@@ -42,6 +50,7 @@ repositories {
 project(':elastic-beanstalk') {
 
     version = '1.0.4-SNAPSHOT'
+	println("VERSION is" + version)
 
     dependencies {
 	compile localGroovy()
