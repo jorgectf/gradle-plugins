@@ -76,6 +76,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    //Create new Environment
 	    println "Create new environment for new application version"
 	    def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  environmentName, versionLabel: versionLabel, templateName: configTemplate)
+	    createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
 	    def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 	    println "Created environment $createEnvironmentResult"
 
@@ -142,6 +143,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    }else{
 		println("Environment doesn't exist. creating environment")
 		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  finalEnvName, versionLabel: versionLabel, templateName: configTemplate)
+		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
 		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 		println "Created environment $createEnvironmentResult"
 	    }
@@ -161,6 +163,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    }catch(Exception ipe){
 		println("Environment doesn't exist. creating environment")
 		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
+		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
 		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 		println "Created environment $createEnvironmentResult"
 	    }
