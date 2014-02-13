@@ -50,7 +50,6 @@ repositories {
 project(':elastic-beanstalk') {
 
     version = '1.0.4-SNAPSHOT'
-	println("VERSION is" + version)
 
     dependencies {
 	compile localGroovy()
