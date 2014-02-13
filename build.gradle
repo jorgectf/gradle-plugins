@@ -25,8 +25,9 @@ subprojects {
     uploadArchives {
 
 	repositories.mavenDeployer {
-	    repository(url: project.ext.repositoryReleasesUrl) {
-		authentication(userName: project.ext.repositoryUser, password: project.ext.repositoryPwd)
+	    repository(url: project.hasProperty('repositoryReleasesUrl')?project.ext.repositoryReleasesUrl:'') {
+		authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
+		password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
 	    }
 	}
     }

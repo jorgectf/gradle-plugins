@@ -25,4 +25,4 @@ _git.gsp
 .idea
 classes/
 tlog.*
-
+gradle.properties
