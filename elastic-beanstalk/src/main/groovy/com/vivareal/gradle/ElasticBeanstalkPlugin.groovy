@@ -17,9 +17,15 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
     def previousEnvironmentName
     def versionLabel
     def configTemplate
-    AWSCredentials awsCredentials
     def warFilePath
     def newEnvironmentName
+    
+    AWSCredentials awsCredentials
+
+    final def APP_ENV_NAMESPACE = "aws:elasticbeanstalk:application:environment"
+    final def JVM_OPTS_NAMESPACE = "aws:elasticbeanstalk:container:tomcat:jvmoptions"
+    final def BEANSTALK_ENV_PROPERTY_PREFIX = "beanstalk.env."
+    final def BEANSTALK_JVM_PARAMETER_PREFIX = "beanstalk.jvm."
 
     void apply(Project project) {
 
@@ -49,6 +55,45 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
 	}
 
+	def getEnvironmentOptions = {
+	    def selectedProperties = project.ext.properties.findAll {
+		it.key.startsWith(BEANSTALK_ENV_PROPERTY_PREFIX)
+	    }
+	    def environmentOptions = []
+	    selectedProperties.each { key, value ->
+		def realKey = key.substring(BEANSTALK_ENV_PROPERTY_PREFIX.length())
+		def config = new ConfigurationOptionSetting()
+		config.setNamespace(APP_ENV_NAMESPACE)
+		config.setOptionName(realKey)
+		config.setValue(value)
+		environmentOptions << config
+	    }
+	    environmentOptions
+	}
+    
+	def getJvmOptions = {
+	    def selectedProperties = project.ext.properties.findAll {
+		it.key.startsWith(BEANSTALK_JVM_PARAMETER_PREFIX)
+	    }
+	    def jvmOptions = []
+	    selectedProperties.each { key, value ->
+		def realKey = key.substring(BEANSTALK_JVM_PARAMETER_PREFIX.length())
+		def config = new ConfigurationOptionSetting()
+		config.setNamespace(JVM_OPTS_NAMESPACE)
+		config.setOptionName(realKey)
+		config.setValue(value)
+		jvmOptions << config
+	    }
+	    jvmOptions
+	}
+
+	def getOptionsSettings = {
+	    def envOptions = getEnvironmentOptions()
+	    def jvmOptions = getJvmOptions()
+	    envOptions.addAll(jvmOptions)
+	    return envOptions
+	}
+
 	project.task('testBeanstalk')<<{
 
 	    println "Application Name: ${applicationName}"
@@ -76,6 +121,8 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    //Create new Environment
 	    println "Create new environment for new application version"
 	    def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  environmentName, versionLabel: versionLabel, templateName: configTemplate)
+	    createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
+	    createEnvironmentRequest.setOptionSettings(getOptionsSettings())
 	    def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 	    println "Created environment $createEnvironmentResult"
 
@@ -137,11 +184,14 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		//Deploy the new version to the new environment
 		println "Update environment with uploaded application version"
 		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  finalEnvName, versionLabel: versionLabel)
+		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
 		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
 		println "Updated environment $updateEnviromentResult"
 	    }else{
 		println("Environment doesn't exist. creating environment")
 		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  finalEnvName, versionLabel: versionLabel, templateName: configTemplate)
+		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
+		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
 		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 		println "Created environment $createEnvironmentResult"
 	    }
@@ -155,12 +205,15 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		//Deploy the existing version to the new environment
 		println "Update environment with existing application version ${versionLabel}"
 		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  previousEnvironmentName, versionLabel: versionLabel)
+		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
 		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
 		println "Updated environment $updateEnviromentResult"
 
 	    }catch(Exception ipe){
 		println("Environment doesn't exist. creating environment")
 		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
+		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
+		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
 		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 		println "Created environment $createEnvironmentResult"
 	    }
