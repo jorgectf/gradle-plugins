@@ -6,6 +6,8 @@ import com.amazonaws.auth.*
 import com.amazonaws.services.s3.*
 import com.amazonaws.services.elasticbeanstalk.*
 import com.amazonaws.services.elasticbeanstalk.model.*
+import com.amazonaws.services.elasticloadbalancing.*
+import com.amazonaws.services.elasticloadbalancing.model.*
 import java.util.concurrent.TimeUnit
 import com.amazonaws.AmazonServiceException
 import com.amazonaws.regions.Region
@@ -19,9 +21,9 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
     def configTemplate
     def warFilePath
     def newEnvironmentName
-    
-    AWSCredentials awsCredentials
 
+    AWSCredentials awsCredentials
+    
     final def APP_ENV_NAMESPACE = "aws:elasticbeanstalk:application:environment"
     final def JVM_OPTS_NAMESPACE = "aws:elasticbeanstalk:container:tomcat:jvmoptions"
     final def BEANSTALK_ENV_PROPERTY_PREFIX = "beanstalk.env."
@@ -29,28 +31,34 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
     void apply(Project project) {
 
+	awsCredentials = getCredentials(project)
+	
+	AWSElasticBeanstalk elasticBeanstalk
+	AmazonElasticLoadBalancing loadBalancer
+	AmazonS3 s3
+	
 	previousEnvironmentName = project.ext.has('currentEnvironment')?project.ext.currentEnvironment:null
 	applicationName = project.ext.has('applicationName')?project.ext.applicationName:null
 	configTemplate = project.ext.has('configTemplate')?project.ext.configTemplate:null
 	warFilePath = project.ext.has('warFilePath')?project.ext.warFilePath:null
 	//if no new evn name is provided, use version as env name
 	newEnvironmentName = project.ext.has('newEnvironmentName')?project.ext.newEnvironmentName:versionLabel
-
-	awsCredentials = getCredentials(project)
-	AWSElasticBeanstalk elasticBeanstalk;
-
-	AmazonS3 s3;
-	if (awsCredentials){
+	
+	if (awsCredentials) {
 	    s3 = new AmazonS3Client(awsCredentials)
 	    elasticBeanstalk = new AWSElasticBeanstalkClient(awsCredentials)
-	    try{
-		if (project.ext.has('awsRegion')){
+	    loadBalancer = new AmazonElasticLoadBalancingClient(awsCredentials)
+	    try {
+		if (project.ext.has('awsRegion')) {
 		    elasticBeanstalk.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		}else {
+		    loadBalancer.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
+		} else {
 		    elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
+		    loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
 		}
-	    }catch(Exception e){
+	    } catch (Exception e) {
 		elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
+		loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
 	    }
 
 	}
@@ -129,16 +137,9 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    if (!createEnvironmentResult.environmentId)
 		throw new org.gradle.api.tasks.StopExecutionException()
 
-
-	    //Check if new Environment is ready
-	    try{
-		environmentIsReady(elasticBeanstalk,[environmentName])
-
-	    }catch(Exception e){
-		org.codehaus.groovy.runtime.StackTraceUtils.sanitize(e).printStackTrace()
-		throw new org.gradle.api.tasks.StopExecutionException()
-	    }
-
+	    enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,environmentName)
+	    println "Added Cross-zone load balancing to environment ${environmentName}"
+	    
 	    //If it gets here, environment is ready. Check health next
 
 	    println("Checking that new environment's health is Green before swapping urls")
@@ -151,7 +152,6 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		throw new org.gradle.api.tasks.StopExecutionException("Environment is not Green, cannot continue")
 
 	    println("Environment's health is Green")
-
 
 	    // Swap new environment with previous environment
 	    // NOTE: Envirnments take too long to be green. Swapping right after deployment is not a good idea.
@@ -187,13 +187,15 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
 		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
 		println "Updated environment $updateEnviromentResult"
-	    }else{
+	    } else {
 		println("Environment doesn't exist. creating environment")
 		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  finalEnvName, versionLabel: versionLabel, templateName: configTemplate)
 		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
 		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
 		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 		println "Created environment $createEnvironmentResult"
+		enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,finalEnvName)
+		println "Added Cross-zone load balancing to environment ${finalEnvName}"	
 	    }
 
 	}
@@ -208,7 +210,6 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
 		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
 		println "Updated environment $updateEnviromentResult"
-
 	    }catch(Exception ipe){
 		println("Environment doesn't exist. creating environment")
 		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
@@ -216,6 +217,8 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
 		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
 		println "Created environment $createEnvironmentResult"
+		enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,previousEnvironmentName)
+		println "Added Cross-zone load balancing to environment ${previousEnvironmentName}"
 	    }
 
 	}
@@ -321,6 +324,30 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	catch( e ) {
 	    throw e
 	}
+    }
+
+    private enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,environmentName) {
+	// assume the beanstalk environment has only one load balancer since it is default behavior
+	try {
+	    environmentIsReady(elasticBeanstalk,[environmentName])
+
+	} catch(Exception e){
+	    org.codehaus.groovy.runtime.StackTraceUtils.sanitize(e).printStackTrace()
+	    throw new org.gradle.api.tasks.StopExecutionException()
+	}
+	
+	def request = new DescribeEnvironmentResourcesRequest(environmentName: environmentName)
+	def response = elasticBeanstalk.describeEnvironmentResources(search)
+	def loadBalancers = response.environmentResources.loadBalancers.name
+	def loadBalancerName = loadBalancers[0]
+	
+	def attributes = new LoadBalancerAttributes()
+	attributes.crossZoneLoadBalancing = new CrossZoneLoadBalancing(enabled: true)
+
+	request = new ModifyLoadBalancerAttributesRequest(loadBalancerName: loadBalancerName, loadBalancerAttributes: attributes)
+	response = loadBalancer.modifyLoadBalancerAttributes(request)
+
+	response
     }
 }
 

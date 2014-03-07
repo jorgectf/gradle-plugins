@@ -53,6 +53,12 @@ class EC2Plugin implements Plugin<Project> {
 		    .withSecurityGroupIds("${securityGroupId}")
 		    .withKeyName("${keyName}")
 		    .withUserData(Base64.encodeBase64String("${userData}".getBytes()))
+    
+	    if(securityGroupId) {
+		def groupIds = []
+		groupIds.add(securityGroupId)
+	    	runInstancesRequest.setSecurityGroupIds(groupIds)
+	    }
 
 	    RunInstancesResult runInstances = ec2.runInstances(runInstancesRequest)
 	    def instanceId = runInstances.reservation.instances.get(0).instanceId
