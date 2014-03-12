@@ -337,7 +337,8 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	}
 	
 	def request = new DescribeEnvironmentResourcesRequest(environmentName: environmentName)
-	def response = elasticBeanstalk.describeEnvironmentResources(search)
+	def response = elasticBeanstalk.describeEnvironmentResources(request)
+
 	def loadBalancers = response.environmentResources.loadBalancers.name
 	def loadBalancerName = loadBalancers[0]
 	
