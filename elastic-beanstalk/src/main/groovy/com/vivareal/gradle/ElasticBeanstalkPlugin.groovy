@@ -397,6 +397,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
     @groovy.transform.TimedInterrupt(value = 5L, unit = TimeUnit.MINUTES, applyToAllClasses=false)
     private allInstancesHealthy(AmazonEC2Client ec2, AmazonAutoScalingClient autoScaling, autoScalingGroupName) {
+	def sleepAfterScaling = 60000
 	def done = false
 	try {
 	    while(!done) {
@@ -426,6 +427,8 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		}
 		sleep(20000)
 	    }
+	    println ">> waiting for " + sleepAfterScaling + " ms after scaling activity and new instance passing status checks"
+	    sleep(sleepAfterScaling)
 	}
 	catch( e ) {
 	    throw e
