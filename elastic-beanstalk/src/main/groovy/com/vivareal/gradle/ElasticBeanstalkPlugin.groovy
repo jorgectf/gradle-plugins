@@ -12,8 +12,12 @@ import com.amazonaws.regions.Regions
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
 import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsRequest
 import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsResult
-import com.amazonaws.services.autoscaling.model.Instance
 import com.amazonaws.services.autoscaling.model.UpdateAutoScalingGroupRequest
+import com.amazonaws.services.ec2.AmazonEC2Client
+import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest
+import com.amazonaws.services.ec2.model.DescribeInstanceStatusResult
+import com.amazonaws.services.ec2.model.Instance
+import com.amazonaws.services.ec2.model.InstanceStatus
 import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalk
 import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalkClient
 import com.amazonaws.services.elasticbeanstalk.model.AutoScalingGroup
@@ -59,7 +63,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	AWSElasticBeanstalk elasticBeanstalk
 	AmazonElasticLoadBalancing loadBalancer
 	AmazonAutoScalingClient autoScaling
-
+	AmazonEC2Client ec2
 	AmazonS3 s3
 
 	previousEnvironmentName = project.ext.has('currentEnvironment')?project.ext.currentEnvironment:null
@@ -76,20 +80,25 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    elasticBeanstalk = new AWSElasticBeanstalkClient(awsCredentials)
 	    loadBalancer = new AmazonElasticLoadBalancingClient(awsCredentials)
 	    autoScaling = new AmazonAutoScalingClient(awsCredentials)
+	    ec2 = new AmazonEC2Client(awsCredentials)
+
 	    try {
 		if (project.ext.has('awsRegion')) {
 		    elasticBeanstalk.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
 		    loadBalancer.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
 		    autoScaling.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
+		    ec2.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
 		} else {
 		    elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
 		    loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
 		    autoScaling.setRegion(Region.getRegion(Regions.SA_EAST_1))
+		    ec2.setRegion(Region.getRegion(Regions.SA_EAST_1))
 		}
 	    } catch (Exception e) {
 		elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
 		loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
 		autoScaling.setRegion(Region.getRegion(Regions.SA_EAST_1))
+		ec2.setRegion(Region.getRegion(Regions.SA_EAST_1))
 	    }
 
 	}
@@ -208,7 +217,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
 	    println "Checking if environment ${finalEnvName} exists"
 
-	    def search = new DescribeEnvironmentsRequest(environmentNames: [finalEnvName], applicationName:applicationName)
+	    def search = new DescribeEnvironmentsRequest(environmentNames: [finalEnvName], applicationName:applicationName, includeDeleted: false)
 	    def result = elasticBeanstalk.describeEnvironments(search)
 
 	    if (!result.environments.empty){
@@ -269,7 +278,9 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		autoScaling.updateAutoScalingGroup(updateAsRequest)
 		println "Desired capacity of auto scaling group increased"
 
-		allInstancesHealthy(autoScaling,autoScalingGroupName)
+
+
+		allInstancesHealthy(ec2,autoScaling,autoScalingGroupName)
 
 		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  previousEnvironmentName, versionLabel: versionLabel)
 		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
@@ -385,23 +396,27 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
     }
 
     @groovy.transform.TimedInterrupt(value = 5L, unit = TimeUnit.MINUTES, applyToAllClasses=false)
-    private allInstancesHealthy(AmazonAutoScalingClient autoScaling, autoScalingGroupName) {
+    private allInstancesHealthy(AmazonEC2Client ec2, AmazonAutoScalingClient autoScaling, autoScalingGroupName) {
 	def done = false
 	try {
-	    while( !done ) {
+	    while(!done) {
 		done = true
-		println("Checking if all instances in autoscaling group [" + autoScalingGroupName + "] are healthy")
+		println("Checking if all instances in autoscaling group [" + autoScalingGroupName + "] are ready")
 
-		DescribeAutoScalingGroupsRequest search = new DescribeAutoScalingGroupsRequest(autoScalingGroupNames: [autoScalingGroupName])
-		DescribeAutoScalingGroupsResult result = autoScaling.describeAutoScalingGroups(search)
+		DescribeAutoScalingGroupsRequest asRequest = new DescribeAutoScalingGroupsRequest(autoScalingGroupNames: [autoScalingGroupName])
+		DescribeAutoScalingGroupsResult asResult = autoScaling.describeAutoScalingGroups(asRequest)
 
-		List<Instance> instances = result.autoScalingGroups.get(0).instances
+		List<Instance> instances = asResult.autoScalingGroups.get(0).instances
+		def instanceIds = instances*.instanceId
 
-		if(instances.size() > 2) {
-		    instances.each() {
-			println ">> instance " + it.instanceId + " status is " + it.healthStatus
+		DescribeInstanceStatusRequest statusRequest = new DescribeInstanceStatusRequest().withInstanceIds(instanceIds)
+		DescribeInstanceStatusResult statusResult = ec2.describeInstanceStatus(statusRequest)
+		List<InstanceStatus> instanceStatuses = statusResult.instanceStatuses
 
-			if(it.healthStatus != "Healthy") {
+		if(instanceStatuses.size() > 2) {
+		    instanceStatuses.eachWithIndex() { obj, i ->
+			println ">> instance " + instanceIds[i] + " status is " + obj.instanceStatus.details[0].status
+			if(obj.instanceStatus.details[0].status != "passed") {
 			    done = false
 			}
 		    }
