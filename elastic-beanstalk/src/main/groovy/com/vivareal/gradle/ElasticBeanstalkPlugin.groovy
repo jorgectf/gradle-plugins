@@ -277,7 +277,8 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		DescribeAutoScalingGroupsRequest describeAsRequest = new  DescribeAutoScalingGroupsRequest(autoScalingGroupNames: [autoScalingGroupName])
 		DescribeAutoScalingGroupsResult describeAsResponse = autoScaling.describeAutoScalingGroups(describeAsRequest)
 		AutoScalingGroup asGroup = describeAsResponse.autoScalingGroups[0]
-		def newDesiredCapacity = asGroup.desiredCapacity + 1
+
+		def newDesiredCapacity = (asGroup.desiredCapacity + 1 > asGroup.maxSize) ? asGroup.maxSize : asGroup.desiredCapacity + 1
 
 		UpdateAutoScalingGroupRequest updateAsRequest =
 			new UpdateAutoScalingGroupRequest(autoScalingGroupName: autoScalingGroupName, desiredCapacity: newDesiredCapacity)
@@ -285,7 +286,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
 		println "Desired capacity of auto scaling group increased"
 
-		allInstancesHealthy(ec2,autoScaling,autoScalingGroupName)
+		allInstancesHealthy(ec2,autoScaling,autoScalingGroupName,newDesiredCapacity)
 
 		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  previousEnvironmentName, versionLabel: versionLabel)
 		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
@@ -401,7 +402,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
     }
 
     @groovy.transform.TimedInterrupt(value = 5L, unit = TimeUnit.MINUTES, applyToAllClasses=false)
-    private allInstancesHealthy(AmazonEC2Client ec2, AmazonAutoScalingClient autoScaling, autoScalingGroupName) {
+    private allInstancesHealthy(AmazonEC2Client ec2, AmazonAutoScalingClient autoScaling, autoScalingGroupName, desiredNumberofInstances) {
 	def sleepAfterScaling = 60000
 	def done = false
 	try {
@@ -419,7 +420,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		DescribeInstanceStatusResult statusResult = ec2.describeInstanceStatus(statusRequest)
 		List<InstanceStatus> instanceStatuses = statusResult.instanceStatuses
 
-		if(instanceStatuses.size() > 2) {
+		if(instanceStatuses.size() >= desiredNumberofInstances) {
 		    instanceStatuses.eachWithIndex() { obj, i ->
 			println ">> instance " + instanceIds[i] + " status is " + obj.instanceStatus.details[0].status
 			if(obj.instanceStatus.details[0].status != "passed") {
