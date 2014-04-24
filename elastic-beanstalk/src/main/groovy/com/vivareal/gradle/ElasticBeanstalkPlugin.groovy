@@ -10,6 +10,7 @@ import com.amazonaws.auth.BasicAWSCredentials
 import com.amazonaws.regions.Region
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
+import com.amazonaws.services.autoscaling.model.AutoScalingGroup
 import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsRequest
 import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsResult
 import com.amazonaws.services.autoscaling.model.UpdateAutoScalingGroupRequest
@@ -20,7 +21,6 @@ import com.amazonaws.services.ec2.model.Instance
 import com.amazonaws.services.ec2.model.InstanceStatus
 import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalk
 import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalkClient
-import com.amazonaws.services.elasticbeanstalk.model.AutoScalingGroup
 import com.amazonaws.services.elasticbeanstalk.model.ConfigurationOptionSetting
 import com.amazonaws.services.elasticbeanstalk.model.CreateApplicationVersionRequest
 import com.amazonaws.services.elasticbeanstalk.model.CreateEnvironmentRequest
@@ -271,14 +271,19 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		// increase desired capacity
 		DescribeEnvironmentResourcesRequest request = new DescribeEnvironmentResourcesRequest(environmentName: previousEnvironmentName)
 		DescribeEnvironmentResourcesResult result = elasticBeanstalk.describeEnvironmentResources(request)
-		List<AutoScalingGroup> autoScalingGroups = result.environmentResources.autoScalingGroups
+		def autoScalingGroups = result.environmentResources.autoScalingGroups
 		def autoScalingGroupName = autoScalingGroups[0].name
 
-		UpdateAutoScalingGroupRequest updateAsRequest = new UpdateAutoScalingGroupRequest(autoScalingGroupName: autoScalingGroupName, desiredCapacity: 3)
+		DescribeAutoScalingGroupsRequest describeAsRequest = new  DescribeAutoScalingGroupsRequest(autoScalingGroupNames: [autoScalingGroupName])
+		DescribeAutoScalingGroupsResult describeAsResponse = autoScaling.describeAutoScalingGroups(describeAsRequest)
+		AutoScalingGroup asGroup = describeAsResponse.autoScalingGroups[0]
+		def newDesiredCapacity = asGroup.desiredCapacity + 1
+
+		UpdateAutoScalingGroupRequest updateAsRequest =
+			new UpdateAutoScalingGroupRequest(autoScalingGroupName: autoScalingGroupName, desiredCapacity: newDesiredCapacity)
 		autoScaling.updateAutoScalingGroup(updateAsRequest)
+
 		println "Desired capacity of auto scaling group increased"
-
-
 
 		allInstancesHealthy(ec2,autoScaling,autoScalingGroupName)
 
