@@ -1,14 +1,14 @@
 package com.vivareal.gradle
 
+import java.util.concurrent.TimeUnit
+
+import org.apache.commons.codec.binary.Base64
 import org.gradle.api.*
 import org.gradle.api.plugins.*
-import com.amazonaws.services.ec2.model.*
+
 import com.amazonaws.auth.BasicAWSCredentials
 import com.amazonaws.services.ec2.*
-import org.apache.commons.codec.binary.Base64
-import com.amazonaws.services.ec2.model.DescribeInstancesRequest
-import java.util.concurrent.TimeUnit
-import com.amazonaws.AmazonServiceException
+import com.amazonaws.services.ec2.model.*
 
 class EC2Plugin implements Plugin<Project> {
 
@@ -36,7 +36,7 @@ class EC2Plugin implements Plugin<Project> {
 	    securityGroupId = project.ext.has('securityGroupId')?project.ext.securityGroupId:null
 	    userData = project.ext.has('userData')?project.ext.userData:""
 	    keyName = project.ext.has('keyName')?project.ext.keyName:null
-	    region = project.ext.has('region')?project.ext.keyName:"sa-east-1";
+	    region = project.ext.has('region')?project.ext.region:"sa-east-1";
 
 	    if (accessKey && secretKey)
 		credentials = new BasicAWSCredentials(accessKey, secretKey)
@@ -53,11 +53,11 @@ class EC2Plugin implements Plugin<Project> {
 		    .withSecurityGroupIds("${securityGroupId}")
 		    .withKeyName("${keyName}")
 		    .withUserData(Base64.encodeBase64String("${userData}".getBytes()))
-    
+
 	    if(securityGroupId) {
 		def groupIds = []
 		groupIds.add(securityGroupId)
-	    	runInstancesRequest.setSecurityGroupIds(groupIds)
+		runInstancesRequest.setSecurityGroupIds(groupIds)
 	    }
 
 	    RunInstancesResult runInstances = ec2.runInstances(runInstancesRequest)
@@ -87,7 +87,7 @@ class EC2Plugin implements Plugin<Project> {
 		def result = ec2.describeInstanceStatus(request)
 
 		// only query first instance (since we only pass one id only one instance should be returned)
-		while (result.instanceStatuses.size < 1) {
+		while (result.instanceStatuses.size() < 1) {
 		    result = ec2.describeInstanceStatus(request)
 		    sleep(5000)
 		}
