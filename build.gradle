@@ -2,7 +2,6 @@ allprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'idea'
     apply plugin: 'java'
-    apply plugin: 'sonar-runner'
 }
 
 
@@ -73,15 +72,16 @@ project(':aws-ec2') {
     }
 }
 
+apply plugin: 'sonar-runner'
 sonarRunner {
     sonarProperties {
-property "sonar.propertyjectName", "VivaReal Gradle Plugins"
-property "sonar.projectDescription", "VivaReal Gradle Plugins"
-property "test.ignoreFailures", "true"
-property "sonar.propertyhost.url", sonarUrl
-property "sonar.jdbc.url", sonarJdbcUrl
-property    "sonar.jdbc.driverClassName", "com.mysql.jdbc.Driver"
-property "sonar.sonarjdbc.username", sonarJdbcUsername
-property "sonar.jdbc.password", sonarrJdbcPassword
+	property "sonar.projectName", "VivaReal Gradle Plugins"
+	property "sonar.projectDescription", "VivaReal Gradle Plugins"
+	property "test.ignoreFailures", "true"
+	property "sonar.host.url", sonarUrl
+	property "sonar.jdbc.url", sonarJdbcUrl
+	property "sonar.jdbc.driverClassName", "com.mysql.jdbc.Driver"
+	property "sonar.jdbc.username", sonarJdbcUsername
+	property "sonar.jdbc.password", sonarJdbcPassword
     }
 }
