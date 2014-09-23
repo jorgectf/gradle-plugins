@@ -1,0 +1,62 @@
+ext {
+
+	def runOSCommand = { command, directory ->
+		def process = Runtime.getRuntime().exec(command, null, directory)
+		/*
+		 * If we don't call waitFor() or waitForOrKill() we may try to read the output
+		 * stream of an unfinished process later
+		 */
+		process.waitForOrKill(5000)
+		def exitValue = process.exitValue()
+		def errorMessage = process.err.text;
+		if (exitValue || errorMessage?.trim()) {
+			logger.error errorMessage
+			errorMessage = errorMessage.replace("\n", " ")
+			if (errorMessage.length() > 100) {
+				errorMessage = errorMessage.substring(0, 95) + " ..."
+			}
+			throw new RuntimeException("OS command [${command}] exited with code ${exitValue}. Error output: ${errorMessage}.")
+		}
+		def resultString = process.text
+		resultString = resultString.trim()
+		return resultString
+	}
+
+	def commitDateString = runOSCommand("git log -1 --format=%cd HEAD", projectDir)
+	def dateFormat = new java.text.SimpleDateFormat("EE MMM dd HH:mm:ss yyyy Z", Locale.US)
+	def commitDate = dateFormat.parse(commitDateString)
+    def timestamp = commitDate.format("yyyyMMddHHmm", TimeZone.getTimeZone('GMT'))
+
+	def commit = runOSCommand("git rev-parse --short HEAD", projectDir)
+
+    if (project.hasProperty("snapshot") || profile == 'dev') {
+	    mvnPublishingUrl = project.hasProperty("snapshotsRepo") ? project.snapshotsRepo : ""
+		  versionSuffix = ".${timestamp}-${commit}-SNAPSHOT"
+
+	  } else {
+        mvnPublishingUrl = project.hasProperty("releasesRepo") ? project.releasesRepo : ""
+        if (project.hasProperty("buildNumber")) {
+            versionSuffix = ".${timestamp}-${commit}-${buildNumber}"
+        } else {
+            versionSuffix = ".${timestamp}-${commit}"
+        }
+    }
+}
+
+allprojects {
+    apply plugin: 'maven-publish'
+
+    version = "${releaseNumber}${versionSuffix}"
+
+    publishing {
+        repositories {
+            maven {
+                url "${mvnPublishingUrl}"
+                credentials {
+                    username project.hasProperty("publishUser") ? project.releasesRepo : ""
+                    password project.hasProperty("publishPassword") ? project.releasesRepo : ""
+                }
+            }
+        }
+    }
+}

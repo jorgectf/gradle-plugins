@@ -1,0 +1,67 @@
+///////////////////////////////////////////
+// JAVA & GROOVY
+
+tasks.findAll { task -> task.name.startsWith('compile') }*.options*.encoding = 'UTF-8'
+
+sourceCompatibility = '1.7'
+
+test {
+    // set heap size for the test JVM(s)
+    minHeapSize = "512m"
+    maxHeapSize = "1024m"
+
+    // set JVM arguments for the test JVM(s)
+    jvmArgs '-XX:MaxPermSize=768m'
+}
+
+if (project.hasProperty("run")) {
+    run {
+        test{
+            if (project.hasProperty('debug')) {
+                jvmArgs '-server', '-Xdebug', '-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005'
+            }
+        }
+    }
+}
+
+if (project.plugins.findPlugin(ApplicationPlugin)) {
+    distZip {
+        archiveName project.name + '.' + extension
+    }
+}
+
+///////////////////////////////////////////
+// PUBLISHING
+
+apply plugin: 'maven-publish'
+
+task environmentJar(type: Jar) {
+    from sourceSets.main.output
+    classifier environment
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            if (project.hasProperty("environmentDependent") && project.environmentDependent) {
+                artifact environmentJar
+            }
+        }
+    }
+}
+
+///////////////////////////////////////////
+// JACOCO
+
+apply plugin: 'jacoco'
+
+jacoco {
+    toolVersion = "0.6.3.201306030806"
+}
+
+jacocoTestReport {
+    group = "Reporting"
+    sourceSets.main.find { it.hasProperty("srcDirs") }.each { additionalSourceDirs = files(it.srcDirs) }
+}
+

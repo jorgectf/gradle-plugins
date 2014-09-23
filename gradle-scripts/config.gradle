@@ -1,0 +1,34 @@
+ext {
+
+    logLevel = 'DEBUG'
+    vrLogLevel = 'DEBUG'
+
+    if (project.hasProperty('prod')) {
+        environment = 'prod'
+        logLevel = 'WARN'
+        vrLogLevel = 'WARN'
+    } else if (project.hasProperty('qa')) {
+        environment = 'qa'
+        logLevel = 'WARN'
+        vrLogLevel = 'INFO'
+    } else if (project.hasProperty('env')) {
+        environment = env
+    } else if (!project.hasProperty('environment')) {
+        environment = 'dev'
+    }
+
+    if (environment == 'dev') {
+        profile = 'dev'
+    } else {
+        profile = 'prod'
+    }
+}
+
+allprojects{
+    apply plugin: 'idea'
+    apply plugin: 'eclipse'
+}
+
+subprojects {
+    ext.propertiesFile = "${project.name}-${profile}.properties".toString()
+}
