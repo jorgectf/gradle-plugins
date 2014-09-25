@@ -1,183 +1,53 @@
 package com.vivareal.gradle
 
-import java.util.concurrent.TimeUnit
-
 import org.gradle.api.*
 import org.gradle.api.plugins.*
 
-import com.amazonaws.auth.AWSCredentials
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.regions.Region
-import com.amazonaws.regions.Regions
-import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
 import com.amazonaws.services.autoscaling.model.AutoScalingGroup
 import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsRequest
 import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsResult
 import com.amazonaws.services.autoscaling.model.UpdateAutoScalingGroupRequest
-import com.amazonaws.services.ec2.AmazonEC2Client
-import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest
-import com.amazonaws.services.ec2.model.DescribeInstanceStatusResult
-import com.amazonaws.services.ec2.model.Instance
-import com.amazonaws.services.ec2.model.InstanceStatus
-import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalk
-import com.amazonaws.services.elasticbeanstalk.AWSElasticBeanstalkClient
-import com.amazonaws.services.elasticbeanstalk.model.ConfigurationOptionSetting
-import com.amazonaws.services.elasticbeanstalk.model.CreateApplicationVersionRequest
 import com.amazonaws.services.elasticbeanstalk.model.CreateEnvironmentRequest
-import com.amazonaws.services.elasticbeanstalk.model.DeleteApplicationVersionRequest
-import com.amazonaws.services.elasticbeanstalk.model.DescribeApplicationVersionsRequest
 import com.amazonaws.services.elasticbeanstalk.model.DescribeEnvironmentResourcesRequest
 import com.amazonaws.services.elasticbeanstalk.model.DescribeEnvironmentResourcesResult
 import com.amazonaws.services.elasticbeanstalk.model.DescribeEnvironmentsRequest
-import com.amazonaws.services.elasticbeanstalk.model.S3Location
 import com.amazonaws.services.elasticbeanstalk.model.SwapEnvironmentCNAMEsRequest
 import com.amazonaws.services.elasticbeanstalk.model.UpdateEnvironmentRequest
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient
-import com.amazonaws.services.elasticloadbalancing.model.CrossZoneLoadBalancing
-import com.amazonaws.services.elasticloadbalancing.model.LoadBalancerAttributes
-import com.amazonaws.services.elasticloadbalancing.model.ModifyLoadBalancerAttributesRequest
-import com.amazonaws.services.s3.AmazonS3
-import com.amazonaws.services.s3.AmazonS3Client
 
 class ElasticBeanstalkPlugin implements Plugin<Project> {
 
-    def applicationName
-    def previousEnvironmentName
-    def versionLabel
-    def configTemplate
-    def warFilePath
-    def newEnvironmentName
-
-    AWSCredentials awsCredentials
-
-    final def APP_ENV_NAMESPACE = "aws:elasticbeanstalk:application:environment"
-    final def JVM_OPTS_NAMESPACE = "aws:elasticbeanstalk:container:tomcat:jvmoptions"
-    final def BEANSTALK_ENV_PROPERTY_PREFIX = "beanstalk.env."
-    final def BEANSTALK_JVM_PARAMETER_PREFIX = "beanstalk.jvm."
-
     void apply(Project project) {
 
-	awsCredentials = getCredentials(project)
+	def propertiesHelper = new ProjectPropertiesHelper(project: project)
+	def ebManager = new ElasticBeanstalkManager(propertiesHelper: propertiesHelper)
+	def awsApi = new AwsApiManager(propertiesHelper: propertiesHelper)
 
-	AWSElasticBeanstalk elasticBeanstalk
-	AmazonElasticLoadBalancing loadBalancer
-	AmazonAutoScalingClient autoScaling
-	AmazonEC2Client ec2
-	AmazonS3 s3
+	project.task('testBeanstalk', type: TestBeanstalkTask)
+	project.task('uploadNewVersion', type: UploadApplicationTask)
+	project.task([
+	    dependsOn: 'uploadNewVersion',
+	    description: "deploys a new version to an existing Elastic Beanstalk environment",
+	    type: DeployBeanstalkTask], 'deployBeanstalk')
 
-	previousEnvironmentName = project.ext.has('currentEnvironment')?project.ext.currentEnvironment:null
-	applicationName = project.ext.has('applicationName')?project.ext.applicationName:null
-	configTemplate = project.ext.has('configTemplate')?project.ext.configTemplate:null
-	warFilePath = project.ext.has('warFilePath')?project.ext.warFilePath:null
-	//if no new evn name is provided, use version as env name
-	newEnvironmentName = project.ext.has('newEnvironmentName')?project.ext.newEnvironmentName:versionLabel
-	versionLabel = project.ext.has('versionLabel')?project.ext.versionLabel:versionLabel
-
-
-	if (awsCredentials) {
-	    s3 = new AmazonS3Client(awsCredentials)
-	    elasticBeanstalk = new AWSElasticBeanstalkClient(awsCredentials)
-	    loadBalancer = new AmazonElasticLoadBalancingClient(awsCredentials)
-	    autoScaling = new AmazonAutoScalingClient(awsCredentials)
-	    ec2 = new AmazonEC2Client(awsCredentials)
-
-	    try {
-		if (project.ext.has('awsRegion')) {
-		    elasticBeanstalk.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		    loadBalancer.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		    autoScaling.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		    ec2.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		} else {
-		    elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		    loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		    autoScaling.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		    ec2.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		}
-	    } catch (Exception e) {
-		elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		autoScaling.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		ec2.setRegion(Region.getRegion(Regions.SA_EAST_1))
-	    }
-
-	}
-
-	def getEnvironmentOptions = {
-	    def selectedProperties = project.ext.properties.findAll {
-		it.key.startsWith(BEANSTALK_ENV_PROPERTY_PREFIX)
-	    }
-	    def environmentOptions = []
-	    selectedProperties.each { key, value ->
-		def realKey = key.substring(BEANSTALK_ENV_PROPERTY_PREFIX.length())
-		def config = new ConfigurationOptionSetting()
-		config.setNamespace(APP_ENV_NAMESPACE)
-		config.setOptionName(realKey)
-		config.setValue(value)
-		environmentOptions << config
-	    }
-	    environmentOptions
-	}
-
-	def getJvmOptions = {
-	    def selectedProperties = project.ext.properties.findAll {
-		it.key.startsWith(BEANSTALK_JVM_PARAMETER_PREFIX)
-	    }
-	    def jvmOptions = []
-	    selectedProperties.each { key, value ->
-		def realKey = key.substring(BEANSTALK_JVM_PARAMETER_PREFIX.length())
-		def config = new ConfigurationOptionSetting()
-		config.setNamespace(JVM_OPTS_NAMESPACE)
-		config.setOptionName(realKey)
-		config.setValue(value)
-		jvmOptions << config
-	    }
-	    jvmOptions
-	}
-
-	def getOptionsSettings = {
-	    def envOptions = getEnvironmentOptions()
-	    def jvmOptions = getJvmOptions()
-	    envOptions.addAll(jvmOptions)
-	    return envOptions
-	}
-
-	project.task('testBeanstalk')<<{
-
-	    println "Application Name: ${applicationName}"
-	    println "New Environment Name: ${environmentName}"
-	    println "Current Environment:  ${previousEnvironmentName}"
-	    println "AWS credentials: $elasticBeanstalk"
-	    println "AWS Region:  ${awsCredentials}"
-	    println "Config Template: ${configTemplate}"
-	    println "Root project version $project.rootProject.version"
-	    println "Project's version $project.version"
-	    println "Version label $versionLabel"
-
-	}
-
-	//dependsOn: 'uploadNewVersion',
 	project.task([
 	    description: "deploys a new version to a new Elastic Beanstalk environment with zero downtime"],'deployBeanstalkZeroDowntime') << {
 
-	    //println project.ext.appName
-	    //if (!project.ext.appName)
-	    //	throw new org.gradle.api.tasks.StopExecutionException()
-
-	    //Copy existing production configuration or use API-PROD
-
+	    def environmentName = propertiesHelper.getBeanstalkEnvironmentName()
+	    def applicationName = propertiesHelper.getBeanstalkApplicationName()
+	    def configTemplate = propertiesHelper.getBeanstalkConfigTemplateName()
+	    def versionLabel = propertiesHelper.getVersionLabel()
 	    //Create new Environment
 	    println "Create new environment for new application version"
-	    def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  environmentName, versionLabel: versionLabel, templateName: configTemplate)
+	    def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: environmentName, versionLabel: versionLabel, templateName: configTemplate)
 	    createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
-	    createEnvironmentRequest.setOptionSettings(getOptionsSettings())
-	    def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
+	    createEnvironmentRequest.setOptionSettings(propertiesHelper.getBeanstalkOptionsSettings())
+	    def createEnvironmentResult = awsApi.elasticBeanstalkClient.createEnvironment(createEnvironmentRequest)
 	    println "Created environment $createEnvironmentResult"
 
 	    if (!createEnvironmentResult.environmentId)
-		throw new org.gradle.api.tasks.StopExecutionException()
+		throw new ElasticbeanstalkPluginException()
 
-	    enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,environmentName)
+	    ebManager.enableCrossZoneLoadBalancing(environmentName)
 	    println "Added Cross-zone load balancing to environment ${environmentName}"
 
 	    //If it gets here, environment is ready. Check health next
@@ -185,21 +55,21 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    println("Checking that new environment's health is Green before swapping urls")
 
 	    def search = new DescribeEnvironmentsRequest(environmentNames: [environmentName])
-	    def result = elasticBeanstalk.describeEnvironments(search)
+	    def result = awsApi.elasticBeanstalkClient.describeEnvironments(search)
 
 	    println(result.environments.health.toString())
 	    if (result.environments.health.toString() != "[Green]")
-		throw new org.gradle.api.tasks.StopExecutionException("Environment is not Green, cannot continue")
+		throw new ElasticbeanstalkPluginException("Environment is not Green, cannot continue")
 
 	    println("Environment's health is Green")
 
 	    // Swap new environment with previous environment
 	    // NOTE: Envirnments take too long to be green. Swapping right after deployment is not a good idea.
 	    println "Swap environment Url"
-	    def swapEnviromentRequest = new SwapEnvironmentCNAMEsRequest(destinationEnvironmentName: previousEnvironmentName , sourceEnvironmentName: environmentName)
+	    def swapEnviromentRequest = new SwapEnvironmentCNAMEsRequest(destinationEnvironmentName: propertiesHelper.getPreviousEnvironmentName() , sourceEnvironmentName: environmentName)
 
 	    try{
-		elasticBeanstalk.swapEnvironmentCNAMEs(swapEnviromentRequest)
+		awsApi.elasticBeanstalkClient.swapEnvironmentCNAMEs(swapEnviromentRequest)
 		println "Swaped CNAMES Successfully"
 
 	    }catch(Exception e){
@@ -208,88 +78,59 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
 	}
 
-	project.task([dependsOn: 'uploadNewVersion',
-	    description: "deploys a new version to an existing Elastic Beanstalk environment"],'deployBeanstalk') << {
-
-	    //override env name
-
-	    def finalEnvName = previousEnvironmentName?previousEnvironmentName:environmentName;
-
-	    println "Checking if environment ${finalEnvName} exists"
-
-	    def search = new DescribeEnvironmentsRequest(environmentNames: [finalEnvName], applicationName:applicationName, includeDeleted: false)
-	    def result = elasticBeanstalk.describeEnvironments(search)
-
-	    if (!result.environments.empty){
-		//Deploy the new version to the new environment
-		println "Update environment with uploaded application version"
-		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  finalEnvName, versionLabel: versionLabel)
-		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
-		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
-		println "Updated environment $updateEnviromentResult"
-	    } else {
-		println("Environment doesn't exist. creating environment")
-		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  finalEnvName, versionLabel: versionLabel, templateName: configTemplate)
-		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
-		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
-		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
-		println "Created environment $createEnvironmentResult"
-		enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,finalEnvName)
-		println "Added Cross-zone load balancing to environment ${finalEnvName}"
-	    }
-
-	}
-
 	project.task([description: "deploys an existing version to an existing Elastic Beanstalk environment"],'deployBeanstalkVersion') << {
-
-	    try{
-
+	    def previousEnvironmentName = propertiesHelper.getBeanstalkPreviousEnvironmentName()
+	    def applicationName = propertiesHelper.getBeanstalkApplicationName()
+	    def versionLabel = propertiesHelper.getVersionLabel()
+	    try {
 		//Deploy the existing version to the new environment
 		println "Update environment with existing application version ${versionLabel}"
-		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  previousEnvironmentName, versionLabel: versionLabel)
-		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
-		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
+		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName: previousEnvironmentName, versionLabel: versionLabel)
+		updateEnviromentRequest.setOptionSettings(propertiesHelper.getBeanstalkOptionsSettings())
+		def updateEnviromentResult = awsApi.elasticBeanstalkClient.updateEnvironment(updateEnviromentRequest)
 		println "Updated environment $updateEnviromentResult"
-	    }catch(Exception ipe){
+	    } catch (Exception ipe) {
+		def configTemplate = propertiesHelper.getBeanstalkConfigTemplateName()
 		println("Environment doesn't exist. creating environment")
 		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
 		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
-		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
-		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
+		createEnvironmentRequest.setOptionSettings(propertiesHelper.getBeanstalkOptionsSettings())
+		def createEnvironmentResult = awsApi.elasticBeanstalkClient.createEnvironment(createEnvironmentRequest)
 		println "Created environment $createEnvironmentResult"
-		enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,previousEnvironmentName)
+		ebManager.enableCrossZoneLoadBalancing(previousEnvironmentName)
 		println "Added Cross-zone load balancing to environment ${previousEnvironmentName}"
 	    }
 
 	}
 
 	project.task([description: "deploys an existing version to an existing Elastic Beanstalk environment with no downtime"],'deployBeanstalkVersionZeroDowntime') << {
-
+	    def previousEnvironmentName = propertiesHelper.getBeanstalkPreviousEnvironmentName()
+	    def versionLabel = propertiesHelper.getVersionLabel()
 	    try{
 		//Deploy the existing version to the new environment
 		println "Update environment with existing application version ${versionLabel}"
 		// increase desired capacity
 		DescribeEnvironmentResourcesRequest request = new DescribeEnvironmentResourcesRequest(environmentName: previousEnvironmentName)
-		DescribeEnvironmentResourcesResult result = elasticBeanstalk.describeEnvironmentResources(request)
+		DescribeEnvironmentResourcesResult result = awsApi.elasticBeanstalkClient.describeEnvironmentResources(request)
 		def autoScalingGroups = result.environmentResources.autoScalingGroups
 		def autoScalingGroupName = autoScalingGroups[0].name
 
 		DescribeAutoScalingGroupsRequest describeAsRequest = new  DescribeAutoScalingGroupsRequest(autoScalingGroupNames: [autoScalingGroupName])
-		DescribeAutoScalingGroupsResult describeAsResponse = autoScaling.describeAutoScalingGroups(describeAsRequest)
+		DescribeAutoScalingGroupsResult describeAsResponse = awsApi.autoscalingClient.describeAutoScalingGroups(describeAsRequest)
 		AutoScalingGroup asGroup = describeAsResponse.autoScalingGroups[0]
 
 		def newDesiredCapacity = (asGroup.desiredCapacity + 1 > asGroup.maxSize) ? asGroup.maxSize : asGroup.desiredCapacity + 1
 
 		UpdateAutoScalingGroupRequest updateAsRequest =
 			new UpdateAutoScalingGroupRequest(autoScalingGroupName: autoScalingGroupName, desiredCapacity: newDesiredCapacity)
-		autoScaling.updateAutoScalingGroup(updateAsRequest)
+		awsApi.autoscalingClient.updateAutoScalingGroup(updateAsRequest)
 
 		println "Desired capacity of auto scaling group increased"
 
-		allInstancesHealthy(ec2,autoScaling,autoScalingGroupName,newDesiredCapacity)
+		ebManager.allInstancesHealthy(autoScalingGroupName, newDesiredCapacity)
 
 		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  previousEnvironmentName, versionLabel: versionLabel)
-		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
+		def updateEnviromentResult = awsApi.elasticBeanstalkClient.updateEnvironment(updateEnviromentRequest)
 		println "Updated environment $updateEnviromentResult"
 	    }catch(Exception ipe){
 		println ipe
@@ -298,171 +139,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
 	}
 
-	// Add a task that swaps environment CNAMEs
-	project.task('uploadNewVersion') << {
-
-	    //Check existing version and check if environment is production
-	    //depends(checkExistingAppVersion, prodEnviroment, war)
-	    //depends(war)
-	    // Log on to AWS with your credentials
-
-	    //this needs to go here because otherwise the root project version is used.
-	    this.versionLabel = project.ext.has('versionLabel')?project.ext.versionLabel:project.version.toString()
-
-	    if (!project.ext.has('skipUpload')){
-		// Delete existing application
-		if (applicationVersionAlreadyExists(elasticBeanstalk)) {
-		    println "Delete existing application version"
-		    def deleteRequest = new DeleteApplicationVersionRequest(applicationName:     applicationName,
-		    versionLabel: versionLabel, deleteSourceBundle: true)
-		    elasticBeanstalk.deleteApplicationVersion(deleteRequest)
-		}
-
-		// Upload a WAR file to Amazon S3
-		println "Uploading application to Amazon S3"
-		def warFile = projectWarFilename(project)
-		String bucketName = elasticBeanstalk.createStorageLocation().getS3Bucket()
-		String key = URLEncoder.encode("${project.name}-${versionLabel}.war", 'UTF-8')
-		def s3Result = s3.putObject(bucketName, key, warFile)
-		println "Uploaded application $s3Result.versionId"
-
-		// Register a new application version
-		println "Create application version with uploaded application"
-		def createApplicationRequest = new CreateApplicationVersionRequest(
-			applicationName: applicationName, versionLabel: versionLabel,
-			description: description,
-			autoCreateApplication: true, sourceBundle: new S3Location(bucketName, key)
-			)
-		def createApplicationVersionResult = elasticBeanstalk.createApplicationVersion(createApplicationRequest)
-		println "Registered application version $createApplicationVersionResult"
-
-	    }
-	}
-
-
     }
 
-    private boolean applicationVersionIsDeployed(elasticBeanstalk) {
-	def search = new DescribeEnvironmentsRequest(applicationName: applicationName, versionLabel: versionLabel)
-	def result = elasticBeanstalk.describeEnvironments(search)
-	!result.environments.empty
-    }
-
-    private boolean applicationVersionAlreadyExists(elasticBeanstalk) {
-	def search = new DescribeApplicationVersionsRequest(applicationName: applicationName, versionLabels: [versionLabel])
-	def result = elasticBeanstalk.describeApplicationVersions(search)
-	!result.applicationVersions.empty
-    }
-
-    private AWSCredentials getCredentials(Project project) {
-	def accessKey = project.ext.has('accessKey')?project.ext.accessKey:null
-	def secretKey = project.ext.has('secretKey')?project.ext.secretKey:null
-
-	if (accessKey && secretKey)
-	    awsCredentials = new BasicAWSCredentials(accessKey, secretKey)
-
-	awsCredentials
-    }
-
-    private String getEnvironmentName() {
-	newEnvironmentName
-    }
-
-    private String getDescription() {
-	applicationName + " via 'gradle' build on ${new Date().format('yyyy-MM-dd')}"
-    }
-
-    private File projectWarFilename(Project project) {
-	if (!warFilePath)// If no war file path was specified, look in /build/libs
-	    new File(project.buildDir,"libs/${project.name}-${versionLabel}.war")
-	else
-	    new File("${warFilePath}")
-    }
-
-    @groovy.transform.TimedInterrupt(value = 20L, unit = TimeUnit.MINUTES, applyToAllClasses=false)
-    private environmentIsReady(elasticBeanstalk, environmentName) {
-	def done = false
-	try {
-	    while( !done ) {
-		println("Checking if new environment is ready/green")
-
-		def search = new DescribeEnvironmentsRequest(environmentNames: environmentName)
-		def result = elasticBeanstalk.describeEnvironments(search)
-
-		println(result.environments.status.toString())
-		if (result.environments.status.toString() == "[Ready]"){
-		    done = true
-		}
-		sleep(20000)
-	    }
-	}
-	catch( e ) {
-	    throw e
-	}
-    }
-
-    @groovy.transform.TimedInterrupt(value = 5L, unit = TimeUnit.MINUTES, applyToAllClasses=false)
-    private allInstancesHealthy(AmazonEC2Client ec2, AmazonAutoScalingClient autoScaling, autoScalingGroupName, desiredNumberofInstances) {
-	def sleepAfterScaling = 60000
-	def done = false
-	try {
-	    while(!done) {
-		done = true
-		println("Checking if all instances in autoscaling group [" + autoScalingGroupName + "] are ready")
-
-		DescribeAutoScalingGroupsRequest asRequest = new DescribeAutoScalingGroupsRequest(autoScalingGroupNames: [autoScalingGroupName])
-		DescribeAutoScalingGroupsResult asResult = autoScaling.describeAutoScalingGroups(asRequest)
-
-		List<Instance> instances = asResult.autoScalingGroups.get(0).instances
-		def instanceIds = instances*.instanceId
-
-		DescribeInstanceStatusRequest statusRequest = new DescribeInstanceStatusRequest().withInstanceIds(instanceIds)
-		DescribeInstanceStatusResult statusResult = ec2.describeInstanceStatus(statusRequest)
-		List<InstanceStatus> instanceStatuses = statusResult.instanceStatuses
-
-		if(instanceStatuses.size() >= desiredNumberofInstances) {
-		    instanceStatuses.eachWithIndex() { obj, i ->
-			println ">> instance " + instanceIds[i] + " status is " + obj.instanceStatus.details[0].status
-			if(obj.instanceStatus.details[0].status != "passed") {
-			    done = false
-			}
-		    }
-		} else {
-		    println ">> not enough instances running"
-		    done = false
-		}
-		sleep(20000)
-	    }
-	    println ">> waiting for " + sleepAfterScaling + " ms after scaling activity and new instance passing status checks"
-	    sleep(sleepAfterScaling)
-	}
-	catch( e ) {
-	    throw e
-	}
-    }
-
-    private enableCrossZoneLoadBalancing(AmazonElasticLoadBalancing loadBalancer,AWSElasticBeanstalk elasticBeanstalk,environmentName) {
-	// assume the beanstalk environment has only one load balancer since it is default behavior
-	try {
-	    environmentIsReady(elasticBeanstalk,[environmentName])
-
-	} catch(Exception e){
-	    org.codehaus.groovy.runtime.StackTraceUtils.sanitize(e).printStackTrace()
-	    throw new org.gradle.api.tasks.StopExecutionException()
-	}
-
-	def request = new DescribeEnvironmentResourcesRequest(environmentName: environmentName)
-	def response = elasticBeanstalk.describeEnvironmentResources(request)
-	def loadBalancers = response.environmentResources.loadBalancers.name
-	def loadBalancerName = loadBalancers[0]
-
-	def attributes = new LoadBalancerAttributes()
-	attributes.crossZoneLoadBalancing = new CrossZoneLoadBalancing(enabled: true)
-
-	request = new ModifyLoadBalancerAttributesRequest(loadBalancerName: loadBalancerName, loadBalancerAttributes: attributes)
-	response = loadBalancer.modifyLoadBalancerAttributes(request)
-
-	response
-    }
 }
 

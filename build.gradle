@@ -1,78 +1,50 @@
+apply plugin: 'sonar-runner'
+
 allprojects {
-    apply plugin: 'maven-publish'
-    apply plugin: 'idea'
-    apply plugin: 'java'
-}
 
-
-subprojects {
-    apply plugin: 'groovy'
     apply plugin: 'maven'
-    apply plugin: 'eclipse'
 
     group = 'com.vivareal.build.gradle'
 
     repositories {
+	mavenLocal()
 	mavenCentral()
 	maven { url 'https://repo.springsource.org/libs-release' }
     }
-
-    dependencies {
-	compile gradleApi()
-	compile localGroovy()
+    
+    buildscript {
+	repositories {
+	    mavenCentral()
+	}
+    }
+    
+    ext {
+	AWS_SDK_VERSION = '1.8.9.1'
     }
 
     uploadArchives {
 
 	repositories.mavenDeployer {
-		
+
 	    repository(url: project.hasProperty('repositoryReleasesUrl')?project.ext.repositoryReleasesUrl:'') {
-			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
-			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
+		authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'',
+		password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
 	    }
 
 	    snapshotRepository(url: project.hasProperty('repositorySnapshotsUrl')?project.ext.repositorySnapshotsUrl:'') {
-			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
-			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
+		authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'',
+		password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
 	    }
-	
-	
 	}
     }
 }
 
 repositories {
+    mavenLocal()
     maven {url "http://repo.grails.org/grails/core/"}
     mavenCentral()
 }
 
-
-project(':elastic-beanstalk') {
-
-    version = '1.0.6'
-
-    dependencies {
-	compile localGroovy()
-	compile gradleApi()
-	compile 'com.amazonaws:aws-java-sdk:1.6.12'
-	compile 'net.java.dev.jets3t:jets3t:0.9.0'
-    }
-}
-
-project(':aws-ec2') {
-
-    version = '1.0.5'
-
-    dependencies {
-	compile localGroovy()
-	compile gradleApi()
-	compile 'com.amazonaws:aws-java-sdk:1.6.12'
-	compile 'net.java.dev.jets3t:jets3t:0.9.0'
-	compile 'org.apache.directory.studio:org.apache.commons.codec:1.8'
-    }
-}
-
-apply plugin: 'sonar-runner'
 sonarRunner {
     sonarProperties {
 	property "sonar.projectName", "VivaReal Gradle Plugins"

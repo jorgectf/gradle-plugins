@@ -1,0 +1,38 @@
+apply plugin: 'java'
+apply plugin: 'war'
+apply plugin: 'eclipse-wtp'
+apply plugin: 'com.vivareal.gradle.elasticbeanstalk'
+
+version = '1.0'
+
+buildscript {
+    /*
+     * The dependencies here are just a workaround that will let us test
+     * the plugin without having to package it and install it in a local
+     * maven repository.
+     */
+    dependencies {
+	/*
+	 * This will read .class files directly from the bin directory 
+	 * of the sibling project.
+	 */
+	classpath files('../elastic-beanstalk/bin')
+	/*
+	 * Since we are not really 'resolving' the Maven-style dependency
+	 * we'll just add whatever the plugin needs to run right here.
+	 * Again, this is just a workaround to test the plugin without 
+	 * performing a release.
+	 */
+	classpath group: 'com.amazonaws', name: 'aws-java-sdk', version: AWS_SDK_VERSION 
+	classpath 'commons-lang:commons-lang:2.3'
+	
+    }
+}
+
+dependencies {
+    /*
+     * These are the regular dependencies of a web project.
+     * They are not related to the classpath workarounds above.
+     */
+    providedCompile group: 'javax.servlet', name: 'javax.servlet-api', version: '3.0.1'
+}

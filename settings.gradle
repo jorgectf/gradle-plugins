@@ -1,5 +1,5 @@
 rootProject.name = 'gradle-plugins'
 
-include 'elastic-beanstalk'
 include 'aws-ec2'
-
+include 'elastic-beanstalk'
+include 'sample-web-project'
