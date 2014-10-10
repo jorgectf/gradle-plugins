@@ -53,8 +53,8 @@ allprojects {
             maven {
                 url "${mvnPublishingUrl}"
                 credentials {
-                    username project.hasProperty("publishUser") ? project.releasesRepo : ""
-                    password project.hasProperty("publishPassword") ? project.releasesRepo : ""
+                    username project.hasProperty("publishUser") ? project.publishUser : ""
+                    password project.hasProperty("publishPassword") ? project.publishPassword : ""
                 }
             }
         }
