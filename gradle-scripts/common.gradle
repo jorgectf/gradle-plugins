@@ -3,7 +3,7 @@
 
 tasks.findAll { task -> task.name.startsWith('compile') }*.options*.encoding = 'UTF-8'
 
-sourceCompatibility = '1.7'
+sourceCompatibility = '1.8'
 
 test {
     // set heap size for the test JVM(s)
