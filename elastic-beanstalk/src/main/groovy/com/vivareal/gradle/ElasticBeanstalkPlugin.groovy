@@ -48,6 +48,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
     def configTemplate
     def warFilePath
     def newEnvironmentName
+    def hotDeploy
 
     AWSCredentials awsCredentials
 
@@ -73,6 +74,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	//if no new evn name is provided, use version as env name
 	newEnvironmentName = project.ext.has('newEnvironmentName')?project.ext.newEnvironmentName:versionLabel
 	versionLabel = project.ext.has('versionLabel')?project.ext.versionLabel:versionLabel
+	hotDeploy = project.ext.has('hotDeploy')?project.ext.hotDeploy.toBoolean():true
 
 
 	if (awsCredentials) {
@@ -221,6 +223,9 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    def result = elasticBeanstalk.describeEnvironments(search)
 
 	    if (!result.environments.empty){
+        if (!hotDeploy) {
+            throw new org.gradle.api.tasks.StopExecutionException("The environment is already running, choose another environment or specify -PhotDeploy=true")
+        }
 		//Deploy the new version to the new environment
 		println "Update environment with uploaded application version"
 		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  finalEnvName, versionLabel: versionLabel)
