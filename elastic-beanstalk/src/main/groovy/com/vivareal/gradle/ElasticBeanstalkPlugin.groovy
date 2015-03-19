@@ -49,6 +49,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
     def warFilePath
     def newEnvironmentName
     def hotDeploy
+    def tier
 
     AWSCredentials awsCredentials
 
@@ -75,6 +76,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	newEnvironmentName = project.ext.has('newEnvironmentName')?project.ext.newEnvironmentName:versionLabel
 	versionLabel = project.ext.has('versionLabel')?project.ext.versionLabel:versionLabel
 	hotDeploy = project.ext.has('hotDeploy')?project.ext.hotDeploy.toBoolean():true
+    tier = project.ext.has('tier') ? project.ext.tier:"web"
 
 
 	if (awsCredentials) {
@@ -222,48 +224,52 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    def search = new DescribeEnvironmentsRequest(environmentNames: [finalEnvName], applicationName:applicationName, includeDeleted: false)
 	    def result = elasticBeanstalk.describeEnvironments(search)
 
-	    if (!result.environments.empty){
-        if (!hotDeploy) {
-            throw new org.gradle.api.tasks.StopExecutionException("The environment is already running, choose another environment or specify -PhotDeploy=true")
-        }
-		//Deploy the new version to the new environment
-		println "Update environment with uploaded application version"
-		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  finalEnvName, versionLabel: versionLabel)
-		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
-		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
-		println "Updated environment $updateEnviromentResult"
+	    if (!result.environments.empty) {
+            if (!hotDeploy) {
+                throw new RuntimeException("The environment is already running, choose another environment or specify -PhotDeploy=true")
+            }
+            //Deploy the new version to the new environment
+            println "Update environment with uploaded application version"
+            def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  finalEnvName, versionLabel: versionLabel)
+            updateEnviromentRequest.setOptionSettings(getOptionsSettings())
+            def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
+            println "Updated environment $updateEnviromentResult"
 	    } else {
-		println("Environment doesn't exist. creating environment")
-		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  finalEnvName, versionLabel: versionLabel, templateName: configTemplate)
-		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
-		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
-		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
-		println "Created environment $createEnvironmentResult"
-		enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,finalEnvName)
-		println "Added Cross-zone load balancing to environment ${finalEnvName}"
+            println("Environment doesn't exist. creating environment")
+            def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  finalEnvName, versionLabel: versionLabel, templateName: configTemplate)
+            if (tier == "web") {
+                createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
+            }
+            createEnvironmentRequest.setOptionSettings(getOptionsSettings())
+            def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
+            println "Created environment $createEnvironmentResult"
+            enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,finalEnvName)
+            println "Added Cross-zone load balancing to environment ${finalEnvName}"
 	    }
 
 	}
 
 	project.task([description: "deploys an existing version to an existing Elastic Beanstalk environment"],'deployBeanstalkVersion') << {
+        def tier = project.ext.has('tier') ? project.ext.tier:"web"
 
-	    try{
-
-		//Deploy the existing version to the new environment
-		println "Update environment with existing application version ${versionLabel}"
-		def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  previousEnvironmentName, versionLabel: versionLabel)
-		updateEnviromentRequest.setOptionSettings(getOptionsSettings())
-		def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
-		println "Updated environment $updateEnviromentResult"
-	    }catch(Exception ipe){
-		println("Environment doesn't exist. creating environment")
-		def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
-		createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
-		createEnvironmentRequest.setOptionSettings(getOptionsSettings())
-		def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
-		println "Created environment $createEnvironmentResult"
-		enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,previousEnvironmentName)
-		println "Added Cross-zone load balancing to environment ${previousEnvironmentName}"
+	    try {
+            //Deploy the existing version to the new environment
+            println "Update environment with existing application version ${versionLabel}"
+            def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName:  previousEnvironmentName, versionLabel: versionLabel)
+            updateEnviromentRequest.setOptionSettings(getOptionsSettings())
+            def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
+            println "Updated environment $updateEnviromentResult"
+        } catch(Exception ipe) {
+            println("Environment doesn't exist. creating environment")
+            def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName:  previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
+            if (tier.equals("web")) {
+                createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
+            }
+            createEnvironmentRequest.setOptionSettings(getOptionsSettings())
+            def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
+            println "Created environment $createEnvironmentResult"
+            enableCrossZoneLoadBalancing(loadBalancer,elasticBeanstalk,previousEnvironmentName)
+            println "Added Cross-zone load balancing to environment ${previousEnvironmentName}"
 	    }
 
 	}
