@@ -160,9 +160,9 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	def getOptionsSettings = {
 	    def envOptions = getEnvironmentOptions()
 	    def jvmOptions = getJvmOptions()
-		def autoscalingOptions = getAutoscalingOptions()
+	    def autoscalingOptions = getAutoscalingOptions()
 	    envOptions.addAll(jvmOptions)
-		envOptions.addAll(autoscalingOptions)
+	    envOptions.addAll(autoscalingOptions)
 	    return envOptions
 	}
 
