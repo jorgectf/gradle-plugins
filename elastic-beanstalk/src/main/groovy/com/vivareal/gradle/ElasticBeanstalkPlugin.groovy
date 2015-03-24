@@ -55,13 +55,19 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
     final def APP_ENV_NAMESPACE = "aws:elasticbeanstalk:application:environment"
     final def JVM_OPTS_NAMESPACE = "aws:elasticbeanstalk:container:tomcat:jvmoptions"
-    final def AUTOSCALING_OPTS_NAMESPACE = "aws:autoscaling:launchconfiguration"
+    final def LAUNCH_CONFIG_OPTS_NAMESPACE = "aws:autoscaling:launchconfiguration"
     final def BEANSTALK_ENV_PROPERTY_PREFIX = "beanstalk.env."
     final def BEANSTALK_JVM_PARAMETER_PREFIX = "beanstalk.jvm."
-    final def BEANSTALK_AUTOSCALING_PARAMETER_PREFIX = "beanstalk.autoscaling."
+    final def BEANSTALK_LAUNCH_CONFIG_PARAMETER_PREFIX = "beanstalk.launchconfig."
+    def namespaceParameters  = [:]
+    
 
     void apply(Project project) {
-
+	
+	namespaceParameters[BEANSTALK_ENV_PROPERTY_PREFIX] = APP_ENV_NAMESPACE
+	namespaceParameters[BEANSTALK_JVM_PARAMETER_PREFIX] = JVM_OPTS_NAMESPACE
+	namespaceParameters[BEANSTALK_LAUNCH_CONFIG_PARAMETER_PREFIX] = LAUNCH_CONFIG_OPTS_NAMESPACE
+	
 	awsCredentials = getCredentials(project)
 
 	AWSElasticBeanstalk elasticBeanstalk
@@ -89,67 +95,30 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    ec2 = new AmazonEC2Client(awsCredentials)
 
 	    try {
+		def region = Region.getRegion(Regions.SA_EAST_1)
 		if (project.ext.has('awsRegion')) {
-		    elasticBeanstalk.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		    loadBalancer.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		    autoScaling.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		    ec2.setRegion(Region.getRegion(Regions.valueOf(project.ext.awsRegion)))
-		} else {
-		    elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		    loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		    autoScaling.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		    ec2.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		}
+		    region = Region.getRegion(Regions.valueOf(project.ext.awsRegion))
+		}		
+		elasticBeanstalk.setRegion(region)
+		loadBalancer.setRegion(region)
+		autoScaling.setRegion(region)
+		ec2.setRegion(region)
 	    } catch (Exception e) {
-		elasticBeanstalk.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		loadBalancer.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		autoScaling.setRegion(Region.getRegion(Regions.SA_EAST_1))
-		ec2.setRegion(Region.getRegion(Regions.SA_EAST_1))
+	    	// should fail here
+		throw new org.gradle.api.tasks.StopExecutionException(e)
 	    }
 
 	}
 
-	def getEnvironmentOptions = {
+	def getDeploymentOptionsByPrefix = { prefix ->
 	    def selectedProperties = project.ext.properties.findAll {
-		it.key.startsWith(BEANSTALK_ENV_PROPERTY_PREFIX)
+		it.key.startsWith(prefix)
 	    }
 	    def environmentOptions = []
 	    selectedProperties.each { key, value ->
-		def realKey = key.substring(BEANSTALK_ENV_PROPERTY_PREFIX.length())
+		def realKey = key.substring(prefix.length())
 		def config = new ConfigurationOptionSetting()
-		config.setNamespace(APP_ENV_NAMESPACE)
-		config.setOptionName(realKey)
-		config.setValue(value)
-		environmentOptions << config
-	    }
-	    environmentOptions
-	}
-
-	def getJvmOptions = {
-	    def selectedProperties = project.ext.properties.findAll {
-		it.key.startsWith(BEANSTALK_JVM_PARAMETER_PREFIX)
-	    }
-	    def jvmOptions = []
-	    selectedProperties.each { key, value ->
-		def realKey = key.substring(BEANSTALK_JVM_PARAMETER_PREFIX.length())
-		def config = new ConfigurationOptionSetting()
-		config.setNamespace(JVM_OPTS_NAMESPACE)
-		config.setOptionName(realKey)
-		config.setValue(value)
-		jvmOptions << config
-	    }
-	    jvmOptions
-	}
-	
-	def getAutoscalingOptions = {
-	    def selectedProperties = project.ext.properties.findAll {
-		it.key.startsWith(BEANSTALK_AUTOSCALING_PARAMETER_PREFIX)
-	    }
-	    def environmentOptions = []
-	    selectedProperties.each { key, value ->
-		def realKey = key.substring(BEANSTALK_AUTOSCALING_PARAMETER_PREFIX.length())
-		def config = new ConfigurationOptionSetting()
-		config.setNamespace(AUTOSCALING_OPTS_NAMESPACE)
+		config.setNamespace(namespaceParameters[prefix])
 		config.setOptionName(realKey)
 		config.setValue(value)
 		environmentOptions << config
@@ -158,11 +127,9 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	}
 
 	def getOptionsSettings = {
-	    def envOptions = getEnvironmentOptions()
-	    def jvmOptions = getJvmOptions()
-	    def autoscalingOptions = getAutoscalingOptions()
-	    envOptions.addAll(jvmOptions)
-	    envOptions.addAll(autoscalingOptions)
+	    def envOptions = getDeploymentOptionsByPrefix(BEANSTALK_ENV_PROPERTY_PREFIX)
+	    envOptions.addAll(getDeploymentOptionsByPrefix(BEANSTALK_JVM_PARAMETER_PREFIX))
+	    envOptions.addAll(getDeploymentOptionsByPrefix(BEANSTALK_LAUNCH_CONFIG_PARAMETER_PREFIX))
 	    return envOptions
 	}
 
