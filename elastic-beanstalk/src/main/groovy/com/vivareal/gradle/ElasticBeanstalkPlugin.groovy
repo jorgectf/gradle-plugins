@@ -55,8 +55,10 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
     final def APP_ENV_NAMESPACE = "aws:elasticbeanstalk:application:environment"
     final def JVM_OPTS_NAMESPACE = "aws:elasticbeanstalk:container:tomcat:jvmoptions"
+	final def AUTOSCALING_OPTS_NAMESPACE = "aws:autoscaling:launchconfiguration"
     final def BEANSTALK_ENV_PROPERTY_PREFIX = "beanstalk.env."
     final def BEANSTALK_JVM_PARAMETER_PREFIX = "beanstalk.jvm."
+	final def BEANSTALK_AUTOSCALING_PARAMETER_PREFIX = "beanstalk.autoscaling."
 
     void apply(Project project) {
 
@@ -138,11 +140,29 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    }
 	    jvmOptions
 	}
+	
+	def getAutoscalingOptions = {
+		def selectedProperties = project.ext.properties.findAll {
+		it.key.startsWith(BEANSTALK_AUTOSCALING_PARAMETER_PREFIX)
+		}
+		def environmentOptions = []
+		selectedProperties.each { key, value ->
+		def realKey = key.substring(BEANSTALK_AUTOSCALING_PARAMETER_PREFIX.length())
+		def config = new ConfigurationOptionSetting()
+		config.setNamespace(AUTOSCALING_OPTS_NAMESPACE)
+		config.setOptionName(realKey)
+		config.setValue(value)
+		environmentOptions << config
+		}
+		environmentOptions
+	}
 
 	def getOptionsSettings = {
 	    def envOptions = getEnvironmentOptions()
 	    def jvmOptions = getJvmOptions()
+		def autoscalingOptions = getAutoscalingOptions()
 	    envOptions.addAll(jvmOptions)
+		envOptions.addAll(autoscalingOptions)
 	    return envOptions
 	}
 
