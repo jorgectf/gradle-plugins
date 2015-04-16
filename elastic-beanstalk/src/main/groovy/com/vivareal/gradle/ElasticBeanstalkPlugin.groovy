@@ -3,8 +3,6 @@ package com.vivareal.gradle
 import java.util.concurrent.TimeUnit
 
 import org.gradle.api.*
-import org.gradle.api.plugins.*
-
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.auth.BasicAWSCredentials
 import com.amazonaws.regions.Region
@@ -349,6 +347,22 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 
 	    }
 	}
+
+		project.task('swapLatestEnvironmentUrl') << {
+
+			if (!project.ext.has('targetUrl')) {
+				throw new RuntimeException('You should provide an target url with the "targetUrl" property (for example production-bazinga.elasticbeanstalk.com)')
+			}
+			String targetUrl = project.get('targetUrl')
+
+			if (!project.ext.has('sourceEnvironment')) {
+				throw new RuntimeException('You should provide the name of the environment you want to put at ' + targetUrl)
+			}
+			String sourceEnvironment = project.get('sourceEnvironment')
+
+			new SwapEnvironmentUrlsTask(elasticBeanstalk, this.applicationName.toString(), targetUrl, sourceEnvironment).execute()
+
+		}
 
 
     }
