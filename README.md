@@ -23,3 +23,6 @@ repositoryPwd=password
 ```
 
 With those properties properly set, you can execute `gradle uploadArchives` and the plugin(s) you execute the task for will be uploaded to your remote repository.
+
+####Docs
+Check our [wiki](https://github.com/VivaReal/gradle-plugins/wiki)
