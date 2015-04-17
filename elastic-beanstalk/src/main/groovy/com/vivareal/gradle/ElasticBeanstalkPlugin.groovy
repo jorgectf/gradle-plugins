@@ -355,12 +355,12 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 			}
 			String targetUrl = project.get('targetUrl')
 
-			if (!project.ext.has('sourceEnvironment')) {
+			if (!project.ext.has('newEnvironment')) {
 				throw new RuntimeException('You should provide the name of the environment you want to put at ' + targetUrl)
 			}
-			String sourceEnvironment = project.get('sourceEnvironment')
+			String newEnvironment = project.get('newEnvironment')
 
-			new SwapEnvironmentUrlsTask(elasticBeanstalk, this.applicationName.toString(), targetUrl, sourceEnvironment).execute()
+			new SwapEnvironmentUrlsTask(elasticBeanstalk, this.applicationName.toString(), targetUrl, newEnvironment).execute()
 
 		}
 

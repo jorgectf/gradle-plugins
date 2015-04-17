@@ -12,14 +12,14 @@ public class SwapEnvironmentUrlsTask {
     private final AWSElasticBeanstalk awsElasticBeanstalk;
     private final String applicationName;
     private final String targetUrl;
-    private final String sourceEnvironmentName;
+    private final String newEnvironment;
 
     public SwapEnvironmentUrlsTask(AWSElasticBeanstalk awsElasticBeanstalk, String applicationName, String targetUrl,
-            String sourceEnvironmentName) {
+            String newEnvironment) {
         this.awsElasticBeanstalk = awsElasticBeanstalk;
         this.applicationName = applicationName;
         this.targetUrl = targetUrl;
-        this.sourceEnvironmentName = sourceEnvironmentName;
+        this.newEnvironment = newEnvironment;
     }
 
     public void execute() {
@@ -29,30 +29,30 @@ public class SwapEnvironmentUrlsTask {
         List<EnvironmentDescription> envs = describedEnvs.getEnvironments();
 
         EnvironmentDescription current = findTargetEnvironment(envs);
-        EnvironmentDescription latest = findSourceEnvironment(envs);
+        EnvironmentDescription newEnv = findSourceEnvironment(envs);
 
         System.out.println("Current environment: " + current.getCNAME() + " " + current.getVersionLabel());
-        System.out.println("Source environment: " + latest.getCNAME() + " " + latest.getVersionLabel());
+        System.out.println("Source environment: " + newEnv.getCNAME() + " " + newEnv.getVersionLabel());
 
-        String latestCNAME = latest.getCNAME();
+        String newEnvCNAME = newEnv.getCNAME();
 
-        if (latestCNAME.equals(current.getCNAME())) {
+        if (newEnvCNAME.equals(current.getCNAME())) {
             throw new IllegalStateException("Source environment is already using target  url " + targetUrl);
         }
 
         SwapEnvironmentCNAMEsRequest swapRequest = new SwapEnvironmentCNAMEsRequest();
         swapRequest.setSourceEnvironmentId(current.getEnvironmentId());
-        swapRequest.setDestinationEnvironmentId(latest.getEnvironmentId());
+        swapRequest.setDestinationEnvironmentId(newEnv.getEnvironmentId());
         awsElasticBeanstalk.swapEnvironmentCNAMEs(swapRequest);
     }
 
     private EnvironmentDescription findSourceEnvironment(List<EnvironmentDescription> envs) {
         for (EnvironmentDescription env : envs) {
-            if (env.getEnvironmentName().equals(sourceEnvironmentName)) {
+            if (env.getEnvironmentName().equals(newEnvironment)) {
                 return env;
             }
         }
-        throw new IllegalArgumentException("Couldn't find an environment with " + sourceEnvironmentName + " name.");
+        throw new IllegalArgumentException("Couldn't find an environment with " + newEnvironment + " name.");
     }
 
     private EnvironmentDescription findTargetEnvironment(List<EnvironmentDescription> environments) {
