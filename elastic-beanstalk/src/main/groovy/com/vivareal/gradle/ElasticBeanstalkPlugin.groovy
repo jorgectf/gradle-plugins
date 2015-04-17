@@ -348,7 +348,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    }
 	}
 
-		project.task('swapLatestEnvironmentUrl') << {
+		project.task('swapEnvironmentUrl') << {
 
 			if (!project.ext.has('targetUrl')) {
 				throw new RuntimeException('You should provide an target url with the "targetUrl" property (for example production-bazinga.elasticbeanstalk.com)')
