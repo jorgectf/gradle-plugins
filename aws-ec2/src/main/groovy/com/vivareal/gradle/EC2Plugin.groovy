@@ -17,18 +17,18 @@ class EC2Plugin implements Plugin<Project> {
 
 		project.task('launchEC2Instance') << {
 
-			project.userData = project.ext.has('project.userData')?project.userData:"";
-			project.region = project.ext.has('project.region')?project.region:"sa-east-1";
-			project.desiredNumInstance = project.ext.has('project.desiredNumInstance') ? Integer.parseInt(project.desiredNumInstance) : 1;
+			def userData = project.ext.has('project.userData')?project.userData:"";
+			def region = project.ext.has('project.region')?project.region:"sa-east-1";
+			def desiredNumInstance = project.ext.has('project.desiredNumInstance') ? Integer.parseInt(project.desiredNumInstance) : 1;
 
 			def credentials
 			if (project.accessKey && project.secretKey)
 				credentials = new BasicAWSCredentials(project.accessKey, project.secretKey)
 
 			AmazonEC2 ec2 = new AmazonEC2Client(credentials);
-			ec2.setEndpoint("https://ec2." + project.region + ".amazonaws.com");
+			ec2.setEndpoint("https://ec2." + region + ".amazonaws.com");
 
-			for(i in 1..project.desiredNumInstance) {
+			for(i in 1..desiredNumInstance) {
 				def subnetId
 				if(i % 2 == 0) {
 					subnetId = project.primarySubnetId
@@ -44,7 +44,7 @@ class EC2Plugin implements Plugin<Project> {
 						.withSubnetId("${subnetId}")
 						.withSecurityGroupIds("${project.securityGroupId}")
 						.withKeyName("${project.keyName}")
-						.withUserData(Base64.encodeBase64String("${project.userData}".getBytes()))
+						.withUserData(Base64.encodeBase64String("${userData}".getBytes()))
 
 				if(project.securityGroupId) {
 					def groupIds = []
