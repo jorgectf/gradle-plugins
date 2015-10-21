@@ -17,9 +17,9 @@ class EC2Plugin implements Plugin<Project> {
 
 		project.task('launchEC2Instance') << {
 
-			def userData = project.ext.has('project.userData')?project.userData:"";
-			def region = project.ext.has('project.region')?project.region:"sa-east-1";
-			def desiredNumInstance = project.ext.has('project.desiredNumInstance') ? Integer.parseInt(project.desiredNumInstance) : 1;
+			def userData = project.ext.has('userData')?project.userData:"";
+			def region = project.ext.has('region')?project.region:"sa-east-1";
+			def desiredNumInstance = project.ext.has('desiredNumInstance') ? Integer.parseInt(project.desiredNumInstance) : 1;
 
 			def credentials
 			if (project.accessKey && project.secretKey)
@@ -42,15 +42,9 @@ class EC2Plugin implements Plugin<Project> {
 						.withMinCount(1)
 						.withMaxCount(1)
 						.withSubnetId("${subnetId}")
-						.withSecurityGroupIds("${project.securityGroupId}")
+						.withSecurityGroupIds("${project.securityGroupId}".split(","))
 						.withKeyName("${project.keyName}")
 						.withUserData(Base64.encodeBase64String("${userData}".getBytes()))
-
-				if(project.securityGroupId) {
-					def groupIds = []
-					groupIds.add(project.securityGroupId)
-					runInstancesRequest.setSecurityGroupIds(groupIds)
-				}
 
 				RunInstancesResult runInstances = ec2.runInstances(runInstancesRequest)
 				def instanceId = runInstances.reservation.instances.get(0).instanceId
