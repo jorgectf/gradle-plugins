@@ -2,7 +2,6 @@ package com.vivareal.gradle
 
 import java.util.concurrent.TimeUnit
 
-import org.apache.commons.codec.binary.Base64
 import org.gradle.api.*
 import org.gradle.api.plugins.*
 
@@ -17,34 +16,33 @@ class EC2Plugin implements Plugin<Project> {
 
 		project.task('launchEC2Instance') << {
 
-			def userData = project.ext.has('userData')?project.userData:"";
-			def region = project.ext.has('region')?project.region:"sa-east-1";
-			def desiredNumInstance = project.ext.has('desiredNumInstance') ? Integer.parseInt(project.desiredNumInstance) : 1;
+			def terminationBehavior = project.ext.has("terminationBehavior") ? project.ext.terminationBehavior : "stop"
 
 			def credentials
-			if (project.accessKey && project.secretKey)
-				credentials = new BasicAWSCredentials(project.accessKey, project.secretKey)
+			if (project.ext.accessKey && project.ext.secretKey)
+				credentials = new BasicAWSCredentials(project.ext.accessKey, project.ext.secretKey)
 
 			AmazonEC2 ec2 = new AmazonEC2Client(credentials);
-			ec2.setEndpoint("https://ec2." + region + ".amazonaws.com");
+			ec2.setEndpoint("https://ec2." + project.ext.region + ".amazonaws.com");
 
-			for(i in 1..desiredNumInstance) {
+			for(i in 1..project.ext.desiredNumInstance) {
 				def subnetId
 				if(i % 2 == 0) {
-					subnetId = project.primarySubnetId
+					subnetId = project.ext.primarySubnetId
 				} else {
-					subnetId = project.secondarySubnetId
+					subnetId = project.ext.secondarySubnetId
 				}
 
 				RunInstancesRequest runInstancesRequest = new RunInstancesRequest()
-						.withInstanceType("${project.instanceType}")
-						.withImageId("${project.imageId}")
+						.withInstanceType("${project.ext.instanceType}")
+						.withImageId("${project.ext.imageId}")
 						.withMinCount(1)
 						.withMaxCount(1)
 						.withSubnetId("${subnetId}")
-						.withSecurityGroupIds("${project.securityGroupId}".split(","))
-						.withKeyName("${project.keyName}")
-						.withUserData(Base64.encodeBase64String("${userData}".getBytes()))
+						.withSecurityGroupIds("${project.ext.securityGroupId}".split(","))
+						.withKeyName("${project.ext.keyName}")
+						.withUserData(org.apache.commons.codec.binary.Base64.encodeBase64String("${project.ext.userData}".getBytes()))
+						.withInstanceInitiatedShutdownBehavior("${terminationBehavior}")
 
 				RunInstancesResult runInstances = ec2.runInstances(runInstancesRequest)
 				def instanceId = runInstances.reservation.instances.get(0).instanceId
@@ -55,10 +53,10 @@ class EC2Plugin implements Plugin<Project> {
 					environmentIsReady(ec2,instanceId)
 					CreateTagsRequest createTagsRequest = new CreateTagsRequest();
 					createTagsRequest.withResources(instanceId) //
-							.withTags(new Tag("Name", project.tag + "-" + i));
+							.withTags(new Tag("Name", project.ext.tag + "-" + i));
 					ec2.createTags(createTagsRequest);
 
-					println("launchEC2Instance: Instance ${instanceId} with tag ${project.tag} launched successfully")
+					println("launchEC2Instance: Instance ${instanceId} with tag ${project.ext.tag} launched successfully")
 				}catch(Exception e){
 					org.codehaus.groovy.runtime.StackTraceUtils.sanitize(e).printStackTrace()
 					throw new org.gradle.api.tasks.StopExecutionException()
