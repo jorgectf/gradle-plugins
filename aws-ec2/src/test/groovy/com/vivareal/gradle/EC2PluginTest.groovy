@@ -14,6 +14,11 @@ class EC2PluginTest {
 	public void setup() {
 		project = ProjectBuilder.builder().build()
 		project.pluginManager.apply 'com.vivareal.gradle.ec2'
+		Properties props = new Properties()
+		props.load(new FileInputStream("sample.properties"))
+		props.each { key, value ->
+			project.extensions.extraProperties.set(key,value)
+		}
 	}
 
 	@Test
@@ -22,11 +27,11 @@ class EC2PluginTest {
 	}
 
 	@Test
-	public void checkMissingProperty() {
+	public void checkThatItIsNotMissingProperties() {
 		try {
 			project.tasks.getByPath("launchEC2Instance").execute()
 		} catch(Exception e) {
-			assert e.getCause().getClass() == MissingPropertyException.class
+			assert e.getCause().getClass() != MissingPropertyException.class
 		}
 	}
 }
