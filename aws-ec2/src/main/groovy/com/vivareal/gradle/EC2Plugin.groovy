@@ -28,9 +28,9 @@ class EC2Plugin implements Plugin<Project> {
 
             println "desired number of instances:" + project.ext.desiredNumInstance
             try {
-                for (i in 1..project.ext.desiredNumInstance) {
+                project.ext.desiredNumInstance.toInteger().times {
                     def subnetId
-                    if (i % 2 == 0) {
+                    if (it % 2 == 0) {
                         subnetId = project.ext.primarySubnetId
                     } else {
                         subnetId = project.ext.secondarySubnetId
@@ -48,10 +48,10 @@ class EC2Plugin implements Plugin<Project> {
                             .withInstanceInitiatedShutdownBehavior("${terminationBehavior}")
 
                     ec2InstanceStarter = new EC2InstanceStarter(runInstancesRequest: runInstancesRequest, ec2: ec2)
-                    instanceIds.add(ec2InstanceStarter.runInstance(project.ext.tag, i))
+                    instanceIds.add(ec2InstanceStarter.runInstance(project.ext.tag, it))
                 }
             } catch (Exception e) {
-                instanceIds.add(ec2InstanceStarter.instanceId)
+                instanceIds.add(ec2InstanceStarter?.instanceId)
                 ec2.terminateInstances(new TerminateInstancesRequest(instanceIds))
                 org.codehaus.groovy.runtime.StackTraceUtils.sanitize(e).printStackTrace()
                 throw new org.gradle.api.tasks.StopExecutionException()
