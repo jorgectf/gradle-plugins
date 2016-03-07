@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit
 import org.gradle.api.*
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
 import com.amazonaws.regions.Region
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
@@ -370,8 +371,11 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	def accessKey = project.ext.has('accessKey')?project.ext.accessKey:null
 	def secretKey = project.ext.has('secretKey')?project.ext.secretKey:null
 
-	if (accessKey && secretKey)
+	if (accessKey && secretKey) {
 	    awsCredentials = new BasicAWSCredentials(accessKey, secretKey)
+	} else {
+		awsCredentials = new DefaultAWSCredentialsProviderChain().getCredentials()
+	}
 
 	awsCredentials
     }
