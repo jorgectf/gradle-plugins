@@ -6,6 +6,7 @@ import org.gradle.api.*
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.auth.BasicAWSCredentials
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
+import com.amazonaws.AmazonClientException
 import com.amazonaws.regions.Region
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
@@ -374,7 +375,11 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	if (accessKey && secretKey) {
 	    awsCredentials = new BasicAWSCredentials(accessKey, secretKey)
 	} else {
-		awsCredentials = new DefaultAWSCredentialsProviderChain().getCredentials()
+		try {		
+			awsCredentials = new DefaultAWSCredentialsProviderChain().getCredentials()
+		} catch (AmazonClientException e) {
+			// Ignored on purpose
+		}
 	}
 
 	awsCredentials
