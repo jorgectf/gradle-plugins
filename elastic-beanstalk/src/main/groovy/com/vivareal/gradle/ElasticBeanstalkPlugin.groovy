@@ -378,7 +378,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 		try {		
 			awsCredentials = new DefaultAWSCredentialsProviderChain().getCredentials()
 		} catch (AmazonClientException e) {
-			// Ignored on purpose
+			println e.getMessage()
 		}
 	}
 
