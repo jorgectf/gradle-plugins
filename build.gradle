@@ -1,5 +1,5 @@
 task wrapper(type: Wrapper) {
-   gradleVersion = '2.12' //version required
+    gradleVersion = '2.12' //version required
 }
 
 allprojects {
@@ -7,7 +7,6 @@ allprojects {
     apply plugin: 'idea'
     apply plugin: 'java'
 }
-
 
 subprojects {
     apply plugin: 'groovy'
@@ -17,36 +16,40 @@ subprojects {
     group = 'com.vivareal.build.gradle'
 
     repositories {
-	mavenCentral()
-	maven { url 'https://repo.springsource.org/libs-release' }
+        mavenCentral()
+        maven {
+            url 'https://repo.springsource.org/libs-release'
+        }
     }
 
     dependencies {
-	compile gradleApi()
-	compile localGroovy()
+        compile gradleApi()
+        compile localGroovy()
     }
 
     uploadArchives {
 
-	repositories.mavenDeployer {
+        repositories.mavenDeployer {
 
-	    repository(url: project.hasProperty('repositoryReleasesUrl')?project.ext.repositoryReleasesUrl:'') {
-			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'',
-			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
-	    }
+            repository(url: project.hasProperty('repositoryReleasesUrl') ? project.ext.repositoryReleasesUrl : '') {
+                authentication(userName: project.hasProperty('repositoryUser') ? project.ext.repositoryUser : '',
+                    password: project.hasProperty('repositoryPwd') ? project.ext.repositoryPwd : '')
+            }
 
-	    snapshotRepository(url: project.hasProperty('repositorySnapshotsUrl')?project.ext.repositorySnapshotsUrl:'') {
-			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'',
-			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
-	    }
+            snapshotRepository(url: project.hasProperty('repositorySnapshotsUrl') ? project.ext.repositorySnapshotsUrl : '') {
+                authentication(userName: project.hasProperty('repositoryUser') ? project.ext.repositoryUser : '',
+                    password: project.hasProperty('repositoryPwd') ? project.ext.repositoryPwd : '')
+            }
 
 
-	}
+        }
     }
 }
 
 repositories {
-    maven {url "http://repo.grails.org/grails/core/"}
+    maven {
+        url "http://repo.grails.org/grails/core/"
+    }
     mavenCentral()
 }
 
@@ -56,14 +59,13 @@ project(':elastic-beanstalk') {
     version = '1.0.12'
 
     dependencies {
-	compile localGroovy()
-	compile gradleApi()
-  compile 'com.amazonaws:aws-java-sdk-ec2:1.10.58'
-  compile 'com.amazonaws:aws-java-sdk-s3:1.10.58'
-	compile 'com.amazonaws:aws-java-sdk-elasticbeanstalk:1.10.58'
-  compile 'com.amazonaws:aws-java-sdk-autoscaling:1.10.58'
-
-	compile 'net.java.dev.jets3t:jets3t:0.9.0'
+        compile localGroovy()
+        compile gradleApi()
+        compile 'com.amazonaws:aws-java-sdk-ec2:1.10.58'
+        compile 'com.amazonaws:aws-java-sdk-s3:1.10.58'
+        compile 'com.amazonaws:aws-java-sdk-elasticbeanstalk:1.10.58'
+        compile 'com.amazonaws:aws-java-sdk-autoscaling:1.10.58'
+        compile 'net.java.dev.jets3t:jets3t:0.9.0'
     }
 }
 
@@ -72,24 +74,24 @@ project(':aws-ec2') {
     version = '1.0.7'
 
     dependencies {
-	compile localGroovy()
-	compile gradleApi()
-  compile 'com.amazonaws:aws-java-sdk-ec2:1.10.58'
-	compile 'net.java.dev.jets3t:jets3t:0.9.0'
-	compile 'org.apache.directory.studio:org.apache.commons.codec:1.8'
+        compile localGroovy()
+        compile gradleApi()
+        compile 'com.amazonaws:aws-java-sdk-ec2:1.10.58'
+        compile 'net.java.dev.jets3t:jets3t:0.9.0'
+        compile 'org.apache.directory.studio:org.apache.commons.codec:1.8'
     }
 }
 
 apply plugin: 'sonar-runner'
 sonarRunner {
     sonarProperties {
-	property "sonar.projectName", "VivaReal Gradle Plugins"
-	property "sonar.projectDescription", "VivaReal Gradle Plugins"
-	property "test.ignoreFailures", "true"
-	property "sonar.host.url", sonarUrl
-	property "sonar.jdbc.url", sonarJdbcUrl
-	property "sonar.jdbc.driverClassName", "com.mysql.jdbc.Driver"
-	property "sonar.jdbc.username", sonarJdbcUsername
-	property "sonar.jdbc.password", sonarJdbcPassword
+        property "sonar.projectName", "VivaReal Gradle Plugins"
+        property "sonar.projectDescription", "VivaReal Gradle Plugins"
+        property "test.ignoreFailures", "true"
+        property "sonar.host.url", sonarUrl
+        property "sonar.jdbc.url", sonarJdbcUrl
+        property "sonar.jdbc.driverClassName", "com.mysql.jdbc.Driver"
+        property "sonar.jdbc.username", sonarJdbcUsername
+        property "sonar.jdbc.password", sonarJdbcPassword
     }
 }
