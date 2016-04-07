@@ -168,7 +168,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
 	    if (!createEnvironmentResult.environmentId)
 		throw new org.gradle.api.tasks.StopExecutionException()
 
-      environmentIsReady(elasticBeanstalk, environmentName)
+      environmentIsReady(elasticBeanstalk, createEnvironmentResult.environmentId)
 
 	    //If it gets here, environment is ready. Check health next
 
@@ -229,7 +229,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
             createEnvironmentRequest.setOptionSettings(getOptionsSettings())
             def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
             println "Created environment $createEnvironmentResult"
-            environmentIsReady(elasticBeanstalk, environmentName)
+            environmentIsReady(elasticBeanstalk, createEnvironmentResult.environmentId)
 	    }
 
 	}
@@ -253,7 +253,7 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
             createEnvironmentRequest.setOptionSettings(getOptionsSettings())
             def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
             println "Created environment $createEnvironmentResult"
-            environmentIsReady(elasticBeanstalk, environmentName)
+            environmentIsReady(elasticBeanstalk, createEnvironmentResult.environmentId)
 	    }
 
 	}
@@ -398,17 +398,17 @@ class ElasticBeanstalkPlugin implements Plugin<Project> {
     }
 
     @groovy.transform.TimedInterrupt(value = 20L, unit = TimeUnit.MINUTES, applyToAllClasses=false)
-    private environmentIsReady(elasticBeanstalk, environmentName) {
+    private environmentIsReady(elasticBeanstalk, environmentId) {
 	def done = false
 	try {
 	    while( !done ) {
-		println("Checking if new environment is ready/green")
+		println("Checking if new environment is ready/green ...")
 
-		def search = new DescribeEnvironmentsRequest(environmentNames: environmentName)
+		def search = new DescribeEnvironmentsRequest(environmentIds: [environmentId])
 		def result = elasticBeanstalk.describeEnvironments(search)
 
-		println(result.environments.status[0].toString())
-		if (result.environments.status[0].toString() == "[Ready]"){
+		println("${environmentId}:${result.environments.status[0]}")
+		if ("${result.environments.status[0]}" == "Ready"){
 		    done = true
 		}
 		sleep(20000)
