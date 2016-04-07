@@ -1,3 +1,7 @@
+task wrapper(type: Wrapper) {
+   gradleVersion = '2.12' //version required
+}
+
 allprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'idea'
@@ -25,18 +29,18 @@ subprojects {
     uploadArchives {
 
 	repositories.mavenDeployer {
-		
+
 	    repository(url: project.hasProperty('repositoryReleasesUrl')?project.ext.repositoryReleasesUrl:'') {
-			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
+			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'',
 			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
 	    }
 
 	    snapshotRepository(url: project.hasProperty('repositorySnapshotsUrl')?project.ext.repositorySnapshotsUrl:'') {
-			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'', 
+			authentication(userName: project.hasProperty('repositoryUser')?project.ext.repositoryUser:'',
 			password: project.hasProperty('repositoryPwd')?project.ext.repositoryPwd:'')
 	    }
-	
-	
+
+
 	}
     }
 }
@@ -49,12 +53,16 @@ repositories {
 
 project(':elastic-beanstalk') {
 
-    version = '1.0.11'
+    version = '1.0.12'
 
     dependencies {
 	compile localGroovy()
 	compile gradleApi()
-	compile 'com.amazonaws:aws-java-sdk:1.10.58'
+  compile 'com.amazonaws:aws-java-sdk-ec2:1.10.58'
+  compile 'com.amazonaws:aws-java-sdk-s3:1.10.58'
+	compile 'com.amazonaws:aws-java-sdk-elasticbeanstalk:1.10.58'
+  compile 'com.amazonaws:aws-java-sdk-autoscaling:1.10.58'
+
 	compile 'net.java.dev.jets3t:jets3t:0.9.0'
     }
 }
@@ -66,7 +74,7 @@ project(':aws-ec2') {
     dependencies {
 	compile localGroovy()
 	compile gradleApi()
-	compile 'com.amazonaws:aws-java-sdk:1.10.58'
+  compile 'com.amazonaws:aws-java-sdk-ec2:1.10.58'
 	compile 'net.java.dev.jets3t:jets3t:0.9.0'
 	compile 'org.apache.directory.studio:org.apache.commons.codec:1.8'
     }
