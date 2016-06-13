@@ -249,14 +249,16 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
 
         project.task([description: "deploys an existing version to an existing Elastic Beanstalk environment"], 'deployBeanstalkVersion') << {
             def tier = project.ext.has('tier') ? project.ext.tier : "web"
+            def environmentId
 
-                try {
+            try {
                 //Deploy the existing version to the new environment
                 println "Update environment with existing application version ${versionLabel}"
                 def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName: previousEnvironmentName, versionLabel: versionLabel)
                 updateEnviromentRequest.setOptionSettings(getOptionsSettings())
                 def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
                 println "Updated environment $updateEnviromentResult"
+                environmentId = updateEnviromentResult.environmentId
             } catch (Exception ipe) {
                 println("Environment doesn't exist. creating environment")
                 def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: previousEnvironmentName, versionLabel: versionLabel, templateName: configTemplate)
@@ -266,7 +268,12 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
                 createEnvironmentRequest.setOptionSettings(getOptionsSettings())
                 def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
                 println "Created environment $createEnvironmentResult"
-                environmentIsReady(elasticBeanstalk, createEnvironmentResult.environmentId)
+                environmentId = createEnvironmentResult.environmentId
+            } finally {
+                if (waitForBeanstalkReady) {
+                    println "Waiting for beanstalk ready..."
+                    environmentIsReady(elasticBeanstalk, environmentId)
+                }
             }
 
         }
