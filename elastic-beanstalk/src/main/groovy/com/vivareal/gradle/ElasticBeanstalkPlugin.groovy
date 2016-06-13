@@ -45,6 +45,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
     def newEnvironmentName
     def hotDeploy
     def tier
+    def waitForBeanstalkReady
 
     AWSCredentials awsCredentials
 
@@ -78,6 +79,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
         newEnvironmentName = project.ext.has('newEnvironmentName') ? project.ext.newEnvironmentName : versionLabel
         versionLabel = project.ext.has('versionLabel') ? project.ext.versionLabel : versionLabel
         hotDeploy = project.ext.has('hotDeploy') ? project.ext.hotDeploy.toBoolean() : true
+        waitForBeanstalkReady = project.ext.has('waitForBeanstalkReady') ? project.ext.waitForBeanstalkReady.toBoolean() : false
         tier = project.ext.has('tier') ? project.ext.tier : "web"
 
 
@@ -214,6 +216,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
 
             def search = new DescribeEnvironmentsRequest(environmentNames: [finalEnvName], applicationName: applicationName, includeDeleted: false)
             def result = elasticBeanstalk.describeEnvironments(search)
+            def environmentId
 
             if (!result.environments.empty) {
                 if (!hotDeploy) {
@@ -224,6 +227,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
                 def updateEnviromentRequest = new UpdateEnvironmentRequest(environmentName: finalEnvName, versionLabel: versionLabel)
                 updateEnviromentRequest.setOptionSettings(getOptionsSettings())
                 def updateEnviromentResult = elasticBeanstalk.updateEnvironment(updateEnviromentRequest)
+                environmentId = updateEnviromentResult.environmentId
                 println "Updated environment $updateEnviromentResult"
             } else {
                 println("Environment doesn't exist. creating environment")
@@ -233,10 +237,14 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
                 }
                 createEnvironmentRequest.setOptionSettings(getOptionsSettings())
                 def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
+                environmentId = createEnvironmentResult.environmentId
                 println "Created environment $createEnvironmentResult"
-                environmentIsReady(elasticBeanstalk, createEnvironmentResult.environmentId)
             }
 
+            if (waitForBeanstalkReady) {
+                println "Waiting for beanstalk ready..."
+                environmentIsReady(elasticBeanstalk, environmentId)
+            }
         }
 
         project.task([description: "deploys an existing version to an existing Elastic Beanstalk environment"], 'deployBeanstalkVersion') << {
