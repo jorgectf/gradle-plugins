@@ -105,14 +105,14 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
         }
 
         def getDeploymentOptionsByPrefix = {
-            prefix - >
+            prefix ->
             def selectedProperties = project.ext.properties.findAll {
                 it.key.startsWith(prefix)
             }
             def environmentOptions = []
             selectedProperties.each {
                 key,
-                value - >
+                value ->
                 def realKey = key.substring(prefix.length())
                 def config = new ConfigurationOptionSetting()
                 config.setNamespace(namespaceParameters[prefix])
@@ -375,12 +375,14 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
 
     private boolean applicationVersionIsDeployed(elasticBeanstalk) {
         def search = new DescribeEnvironmentsRequest(applicationName: applicationName, versionLabel: versionLabel)
-        def result = elasticBeanstalk.describeEnvironments(search) !result.environments.empty
+        def result = elasticBeanstalk.describeEnvironments(search)
+            !result.environments.empty
     }
 
     private boolean applicationVersionAlreadyExists(elasticBeanstalk) {
         def search = new DescribeApplicationVersionsRequest(applicationName: applicationName, versionLabels: [versionLabel])
-        def result = elasticBeanstalk.describeApplicationVersions(search) !result.applicationVersions.empty
+        def result = elasticBeanstalk.describeApplicationVersions(search)
+            !result.applicationVersions.empty
     }
 
     private AWSCredentials getCredentials(Project project) {
@@ -415,7 +417,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
             new File("${warFilePath}")
     }
 
-    @groovy.transform.TimedInterrupt(value = 20 L, unit = TimeUnit.MINUTES, applyToAllClasses = false)
+    @groovy.transform.TimedInterrupt(value = 20L, unit = TimeUnit.MINUTES, applyToAllClasses = false)
     private environmentIsReady(elasticBeanstalk, environmentId) {
         def done = false
         try {
@@ -436,7 +438,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
         }
     }
 
-    @groovy.transform.TimedInterrupt(value = 5 L, unit = TimeUnit.MINUTES, applyToAllClasses = false)
+    @groovy.transform.TimedInterrupt(value = 5L, unit = TimeUnit.MINUTES, applyToAllClasses = false)
     private allInstancesHealthy(AmazonEC2Client ec2, AmazonAutoScalingClient autoScaling, autoScalingGroupName, desiredNumberofInstances) {
         def sleepAfterScaling = 60000
         def done = false
@@ -449,7 +451,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
                 DescribeAutoScalingGroupsResult asResult = autoScaling.describeAutoScalingGroups(asRequest)
 
                 List < Instance > instances = asResult.autoScalingGroups.get(0).instances
-                def instanceIds = instances * .instanceId
+                def instanceIds = instances*.instanceId
 
                 DescribeInstanceStatusRequest statusRequest = new DescribeInstanceStatusRequest().withInstanceIds(instanceIds)
                 DescribeInstanceStatusResult statusResult = ec2.describeInstanceStatus(statusRequest)
@@ -458,7 +460,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
                 if (instanceStatuses.size() >= desiredNumberofInstances) {
                     instanceStatuses.eachWithIndex() {
                         obj,
-                        i - >
+                        i ->
                         println ">> instance " + instanceIds[i] + " status is " + obj.instanceStatus.details[0].status
                         if (obj.instanceStatus.details[0].status != "passed") {
                             done = false
