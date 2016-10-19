@@ -1,5 +1,8 @@
 package com.vivareal.gradle
 
+import com.amazonaws.internal.SdkInternalList
+import com.amazonaws.services.elasticbeanstalk.model.Tag
+
 import java.util.concurrent.TimeUnit
 
 import org.gradle.api.*
@@ -35,7 +38,7 @@ import com.amazonaws.services.elasticbeanstalk.model.UpdateEnvironmentRequest
 import com.amazonaws.services.s3.AmazonS3
 import com.amazonaws.services.s3.AmazonS3Client
 
-class ElasticBeanstalkPlugin implements Plugin < Project > {
+class ElasticBeanstalkPlugin implements Plugin <Project> {
 
     def applicationName
     def previousEnvironmentName
@@ -59,6 +62,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
 
 
     void apply(Project project) {
+        project.extensions.create("beanstalk", BeanstalkParametersExtension)
 
         namespaceParameters[BEANSTALK_ENV_PROPERTY_PREFIX] = APP_ENV_NAMESPACE
         namespaceParameters[BEANSTALK_JVM_PARAMETER_PREFIX] = JVM_OPTS_NAMESPACE
@@ -81,7 +85,6 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
         hotDeploy = project.ext.has('hotDeploy') ? project.ext.hotDeploy.toBoolean() : true
         waitForBeanstalkReady = project.ext.has('waitForBeanstalkReady') ? project.ext.waitForBeanstalkReady.toBoolean() : false
         tier = project.ext.has('tier') ? project.ext.tier : "web"
-
 
         if (awsCredentials) {
             s3 = new AmazonS3Client(awsCredentials)
@@ -231,7 +234,7 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
                 println "Updated environment $updateEnviromentResult"
             } else {
                 println("Environment doesn't exist. creating environment")
-                def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: finalEnvName, versionLabel: versionLabel, templateName: configTemplate)
+                def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: finalEnvName, versionLabel: versionLabel, templateName: configTemplate, tags: project.beanstalk?.awsTags())
                 if (tier == "web") {
                     createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
                 }
@@ -477,5 +480,16 @@ class ElasticBeanstalkPlugin implements Plugin < Project > {
         } catch (e) {
             throw e
         }
+    }
+}
+
+class BeanstalkParametersExtension {
+    def tags
+    def awsTags() {
+        def awsTags = [:] as SdkInternalList
+        tags.each({tag ->
+            awsTags << new Tag(key: tag.key, value: tag.value)
+        })
+        awsTags
     }
 }

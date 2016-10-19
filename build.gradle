@@ -56,7 +56,7 @@ repositories {
 
 project(':elastic-beanstalk') {
 
-    version = '1.0.13'
+    version = '1.0.14'
 
     dependencies {
         compile localGroovy()
