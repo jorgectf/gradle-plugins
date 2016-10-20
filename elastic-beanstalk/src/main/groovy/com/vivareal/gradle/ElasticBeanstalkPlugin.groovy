@@ -486,10 +486,8 @@ class ElasticBeanstalkPlugin implements Plugin <Project> {
 class BeanstalkParametersExtension {
     def tags
     def awsTags() {
-        def awsTags = [:] as SdkInternalList
-        tags.each({tag ->
-            awsTags << new Tag(key: tag.key, value: tag.value)
-        })
-        awsTags
+        tags.collect {
+            new Tag(key: it.key, value: it.value)
+        } as SdkInternalList
     }
 }
