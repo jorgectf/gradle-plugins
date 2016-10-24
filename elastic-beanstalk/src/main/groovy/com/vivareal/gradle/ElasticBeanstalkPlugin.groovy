@@ -49,6 +49,7 @@ class ElasticBeanstalkPlugin implements Plugin <Project> {
     def hotDeploy
     def tier
     def waitForBeanstalkReady
+    def beanstalkProperties
 
     AWSCredentials awsCredentials
 
@@ -85,6 +86,17 @@ class ElasticBeanstalkPlugin implements Plugin <Project> {
         hotDeploy = project.ext.has('hotDeploy') ? project.ext.hotDeploy.toBoolean() : true
         waitForBeanstalkReady = project.ext.has('waitForBeanstalkReady') ? project.ext.waitForBeanstalkReady.toBoolean() : false
         tier = project.ext.has('tier') ? project.ext.tier : "web"
+
+        beanstalkProperties = project.beanstalk
+
+        if (project.ext.has('tags')) {
+            def result = project.ext.tags.split(',').inject([:]) { Map map, String token ->
+                def split = token.split(':')
+                map[split.first().trim()] = split.last().trim()
+                map
+            }
+            beanstalkProperties = new BeanstalkParametersExtension(tags: result)
+        }
 
         if (awsCredentials) {
             s3 = new AmazonS3Client(awsCredentials)
@@ -168,7 +180,7 @@ class ElasticBeanstalkPlugin implements Plugin <Project> {
 
             //Create new Environment
             println "Create new environment for new application version"
-            def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: environmentName, versionLabel: versionLabel, templateName: configTemplate)
+            def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: environmentName, versionLabel: versionLabel, templateName: configTemplate, tags: beanstalkProperties?.awsTags())
             createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
             createEnvironmentRequest.setOptionSettings(getOptionsSettings())
             def createEnvironmentResult = elasticBeanstalk.createEnvironment(createEnvironmentRequest)
@@ -234,7 +246,7 @@ class ElasticBeanstalkPlugin implements Plugin <Project> {
                 println "Updated environment $updateEnviromentResult"
             } else {
                 println("Environment doesn't exist. creating environment")
-                def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: finalEnvName, versionLabel: versionLabel, templateName: configTemplate, tags: project.beanstalk?.awsTags())
+                def createEnvironmentRequest = new CreateEnvironmentRequest(applicationName: applicationName, environmentName: finalEnvName, versionLabel: versionLabel, templateName: configTemplate, tags: beanstalkProperties?.awsTags())
                 if (tier == "web") {
                     createEnvironmentRequest.setCNAMEPrefix(createEnvironmentRequest.getEnvironmentName())
                 }
