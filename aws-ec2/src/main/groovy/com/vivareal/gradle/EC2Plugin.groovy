@@ -12,7 +12,7 @@ class EC2Plugin implements Plugin<Project> {
 
     void apply(Project project) {
 
-        project.task('launchEC2Instance') << {
+        project.task('launchEC2Instance').doLast {
 
             def terminationBehavior = project.ext.has("terminationBehavior") ? project.ext.terminationBehavior : "stop"
 
@@ -113,4 +113,3 @@ class EC2Plugin implements Plugin<Project> {
 
     }
 }
-
