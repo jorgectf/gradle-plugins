@@ -27,3 +27,4 @@ _git.gsp
 classes/
 tlog.*
 gradle.properties
+!.github/*
